@@ -38,7 +38,12 @@ site/
 .zensical-cache/__pycache__/
 
 # ------------------------------------------------------
-# 7. direnv + devenv state (devenv.nix / devenv.yaml are tracked)
+# 7. Console runtime data (SQLite event log, config writes)
+# ------------------------------------------------------
+/data/
+
+# ------------------------------------------------------
+# 8. direnv + devenv state (devenv.nix / devenv.yaml are tracked)
 # ------------------------------------------------------
 .direnv/
 .envrc.local

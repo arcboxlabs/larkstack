@@ -11,7 +11,7 @@ name = "larkstack-console"
 path = "src/main.rs"
 
 [dependencies]
-axum = { workspace = true, features = ["tokio", "http1", "json", "macros"] }
+axum = { workspace = true, features = ["tokio", "http1", "json", "macros", "query"] }
 tokio = { workspace = true, features = [
     "rt-multi-thread",
     "macros",

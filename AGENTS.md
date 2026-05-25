@@ -72,12 +72,19 @@ Single-binary supervisor. `src/main.rs` spawns each subsystem's `run()` as a tok
 
 Routes:
 - `GET /api/status` — `{ "subsystems": { "<name>": { "state", "message", "updated_at" } } }`
+- `GET /api/events` — SSE stream of `Event { id, level, subsystem, target, message, fields, timestamp }`. Honors the `Last-Event-ID` header and a `?since=<id>` query for backfill. Without either, replays the most recent 200 events from SQLite then streams live.
 - `GET /api/health` — `"ok"`
 - `GET /*` — embedded React SPA (falls back to `index.html`)
 
-Env: `CONSOLE_PORT` (default `8080`) for the console listener. Subsystem env vars (`LINEAR_*`, `LARK_*`, etc.) are read by each subsystem's own config loader, same as in standalone mode.
+Env:
+- `CONSOLE_PORT` (default `8080`) — console listener
+- `CONSOLE_DATA_DIR` (default `./data`) — directory for `events.db` and future config artifacts
 
-Phase status: only `linear-bridge` is currently wired in (Phase 2). `meeting-digest` and `standup-bot` ingestion comes in later phases (event bus / SQLite / actions / config reload).
+Subsystem env vars (`LINEAR_*`, `LARK_*`, etc.) are read by each subsystem's own config loader, same as in standalone mode.
+
+Event log retention: the SQLite store keeps the most recent 10,000 events (rolling). On startup the console reads `MAX(id)` and advances the in-memory id counter so reboots don't collide with persisted ids.
+
+Phase status: `linear-bridge` is wired (Phases 1–2), tracing → SSE event stream is live (Phase 3), events persist to SQLite with `?since=` backfill (Phase 4). Still upcoming: config reload (5), actions (6), meeting-digest / standup-bot ingestion (7), richer UI (8).
 
 ## crates/meeting-digest
 

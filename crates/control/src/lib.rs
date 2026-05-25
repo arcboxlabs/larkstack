@@ -17,8 +17,10 @@ use std::time::SystemTime;
 use serde::Serialize;
 use tokio::sync::{RwLock, broadcast};
 
+mod store;
 mod tracing_layer;
 
+pub use store::EventStore;
 pub use tracing_layer::ControlLayer;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -139,6 +141,12 @@ impl ControlPlane {
 
     pub fn next_event_id(&self) -> u64 {
         self.inner.next_id.fetch_add(1, Ordering::Relaxed)
+    }
+
+    /// Ensure subsequent ids exceed the supplied watermark. Useful after
+    /// loading the previous max id from [`EventStore`] at startup.
+    pub fn advance_event_id(&self, min: u64) {
+        self.inner.next_id.fetch_max(min + 1, Ordering::Relaxed);
     }
 }
 
