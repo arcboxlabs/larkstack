@@ -73,6 +73,8 @@ Single-binary supervisor. `src/main.rs` spawns each subsystem's `run()` as a tok
 Routes:
 - `GET /api/status` — `{ "subsystems": { "<name>": { "state", "message", "updated_at" } } }`
 - `GET /api/events` — SSE stream of `Event { id, level, subsystem, target, message, fields, timestamp }`. Honors the `Last-Event-ID` header and a `?since=<id>` query for backfill. Without either, replays the most recent 200 events from SQLite then streams live.
+- `GET /api/config` — current TOML as `application/toml`. Bootstrapped from a default scaffold on first run.
+- `PUT /api/config` — body is the new TOML. Validates by parsing; on success writes the file and broadcasts via `ControlPlane`'s watch channel. Each subsystem supervisor sees the change, aborts its task, and respawns with the new state.
 - `GET /api/health` — `"ok"`
 - `GET /*` — embedded React SPA (falls back to `index.html`)
 
@@ -84,7 +86,9 @@ Subsystem env vars (`LINEAR_*`, `LARK_*`, etc.) are read by each subsystem's own
 
 Event log retention: the SQLite store keeps the most recent 10,000 events (rolling). On startup the console reads `MAX(id)` and advances the in-memory id counter so reboots don't collide with persisted ids.
 
-Phase status: `linear-bridge` is wired (Phases 1–2), tracing → SSE event stream is live (Phase 3), events persist to SQLite with `?since=` backfill (Phase 4). Still upcoming: config reload (5), actions (6), meeting-digest / standup-bot ingestion (7), richer UI (8).
+Config model: a single `config.toml` lives at `$CONSOLE_DATA_DIR/config.toml`. Each subsystem owns a top-level section (e.g. `[linear-bridge]`). Values left empty fall back to the matching env vars (`LINEAR_*`, `LARK_*`, `PORT`, etc.) so secrets can stay in the environment while ops fields are edited from the UI. `linear_bridge::config::AppState::from_toml(full_toml)` is the entry point; the env-var loader is the fallback per-field.
+
+Phase status: `linear-bridge` is wired (Phases 1–2), tracing → SSE event stream is live (Phase 3), events persist to SQLite with `?since=` backfill (Phase 4), config edit + live reload (Phase 5). Still upcoming: actions (6), meeting-digest / standup-bot ingestion (7), richer UI (8).
 
 ## crates/meeting-digest
 

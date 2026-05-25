@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Config } from "./Config";
 import { Events } from "./Events";
 
 type State = "starting" | "running" | "errored" | "stopped";
@@ -91,6 +92,7 @@ export function App() {
     <main>
       <h1>larkstack console</h1>
       <StatusTable />
+      <Config />
       <Events />
     </main>
   );

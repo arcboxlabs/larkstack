@@ -197,12 +197,106 @@ pub struct AppState {
 }
 
 #[cfg(not(feature = "cf-worker"))]
+#[derive(Debug, Deserialize, Default)]
+struct TopLevelToml {
+    #[serde(rename = "linear-bridge", default)]
+    linear_bridge: TomlSection,
+}
+
+#[cfg(not(feature = "cf-worker"))]
+#[derive(Debug, Deserialize, Default)]
+struct TomlSection {
+    #[serde(default)]
+    linear: TomlLinear,
+    #[serde(default)]
+    lark: TomlLark,
+    #[serde(default)]
+    server: TomlServer,
+}
+
+#[cfg(not(feature = "cf-worker"))]
+#[derive(Debug, Deserialize, Default)]
+struct TomlLinear {
+    webhook_secret: Option<String>,
+    api_key: Option<String>,
+}
+
+#[cfg(not(feature = "cf-worker"))]
+#[derive(Debug, Deserialize, Default)]
+struct TomlLark {
+    webhook_url: Option<String>,
+    app_id: Option<String>,
+    app_secret: Option<String>,
+    verification_token: Option<String>,
+    base_url: Option<String>,
+}
+
+#[cfg(not(feature = "cf-worker"))]
+#[derive(Debug, Deserialize, Default)]
+struct TomlServer {
+    port: Option<u16>,
+    debounce_delay_ms: Option<u64>,
+}
+
+#[cfg(not(feature = "cf-worker"))]
 impl AppState {
     pub fn from_env() -> Self {
-        let linear = LinearConfig::from_env().expect("invalid linear config");
-        let lark = LarkConfig::from_env().expect("invalid lark config");
-        let server = ServerConfig::from_env().expect("invalid server config");
+        Self::from_parts(
+            LinearConfig::from_env().expect("invalid linear config"),
+            LarkConfig::from_env().expect("invalid lark config"),
+            ServerConfig::from_env().expect("invalid server config"),
+        )
+    }
 
+    /// Build state from a full config TOML containing a `[linear-bridge]`
+    /// section. Any field missing from the TOML falls back to the env-var
+    /// loader, so callers can pass partial configs without losing secrets
+    /// that only live in the env.
+    pub fn from_toml(full_toml: &str) -> Result<Self, Box<figment::Error>> {
+        let top: TopLevelToml =
+            toml::from_str(full_toml).map_err(|e| Box::new(figment::Error::from(e.to_string())))?;
+        let parsed = top.linear_bridge;
+
+        let mut linear = LinearConfig::from_env().unwrap_or(LinearConfig {
+            webhook_secret: String::new(),
+            api_key: None,
+        });
+        if let Some(s) = parsed.linear.webhook_secret {
+            linear.webhook_secret = s;
+        }
+        if parsed.linear.api_key.is_some() {
+            linear.api_key = parsed.linear.api_key;
+        }
+
+        let mut lark = LarkConfig::from_env().unwrap_or_default();
+        if let Some(s) = parsed.lark.webhook_url {
+            lark.webhook_url = s;
+        }
+        if parsed.lark.app_id.is_some() {
+            lark.app_id = parsed.lark.app_id;
+        }
+        if parsed.lark.app_secret.is_some() {
+            lark.app_secret = parsed.lark.app_secret;
+        }
+        if parsed.lark.verification_token.is_some() {
+            lark.verification_token = parsed.lark.verification_token;
+        }
+        if let Some(s) = parsed.lark.base_url {
+            lark.base_url = s;
+        }
+
+        let mut server = ServerConfig::from_env().unwrap_or_default();
+        if let Some(p) = parsed.server.port {
+            server.port = p;
+        }
+        if let Some(d) = parsed.server.debounce_delay_ms {
+            server.debounce_delay_ms = d;
+        }
+
+        Ok(Self::from_parts(linear, lark, server))
+    }
+
+    fn from_parts(linear: LinearConfig, lark: LarkConfig, server: ServerConfig) -> Self {
         let http = Client::new();
         let lark_bot = lark.bot_client(&http);
         let linear_client = linear.graphql_client(&http);

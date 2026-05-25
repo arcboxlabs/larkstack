@@ -15,7 +15,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::SystemTime;
 
 use serde::Serialize;
-use tokio::sync::{RwLock, broadcast};
+use tokio::sync::{RwLock, broadcast, watch};
 
 mod store;
 mod tracing_layer;
@@ -95,16 +95,19 @@ struct Inner {
     statuses: RwLock<HashMap<String, Status>>,
     events: broadcast::Sender<Event>,
     next_id: AtomicU64,
+    config_tx: watch::Sender<Arc<String>>,
 }
 
 impl Default for ControlPlane {
     fn default() -> Self {
         let (events, _) = broadcast::channel(EVENT_BUFFER);
+        let (config_tx, _) = watch::channel(Arc::new(String::new()));
         Self {
             inner: Arc::new(Inner {
                 statuses: RwLock::new(HashMap::new()),
                 events,
                 next_id: AtomicU64::new(1),
+                config_tx,
             }),
         }
     }
@@ -147,6 +150,24 @@ impl ControlPlane {
     /// loading the previous max id from [`EventStore`] at startup.
     pub fn advance_event_id(&self, min: u64) {
         self.inner.next_id.fetch_max(min + 1, Ordering::Relaxed);
+    }
+
+    /// Replace the current config TOML; subscribers receive the new value
+    /// through [`Self::watch_config`].
+    pub fn set_config(&self, toml: Arc<String>) {
+        // send_replace ignores receiver count (always succeeds).
+        self.inner.config_tx.send_replace(toml);
+    }
+
+    /// Read-only handle to the current config TOML.
+    pub fn config(&self) -> Arc<String> {
+        self.inner.config_tx.borrow().clone()
+    }
+
+    /// Subscribe to config changes. The receiver starts already-pending so
+    /// callers can `borrow_and_update` on first poll.
+    pub fn watch_config(&self) -> watch::Receiver<Arc<String>> {
+        self.inner.config_tx.subscribe()
     }
 }
 
