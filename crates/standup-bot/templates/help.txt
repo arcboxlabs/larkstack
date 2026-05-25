@@ -1,0 +1,9 @@
+命令(群里 @ 我 或 与我私聊):
+• check [today|tomorrow|YYYY-MM-DD] — 列未填者(只读)
+• ensure [date] — 建文档 + 分享,不发群卡片
+• announce [date] — 建文档 + 发群公告卡片
+• remind [date] — 私信未填者
+• urgent [date] — 加急提醒未填者
+• urgent @某人 — 对指定成员加急(可 @ 多人)
+• help — 本帮助
+date 省略时: ensure/announce 默认明天,其余默认今天

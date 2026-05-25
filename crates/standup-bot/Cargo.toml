@@ -1,0 +1,24 @@
+[package]
+name = "standup-bot"
+version = "0.1.0"
+edition = "2024"
+description = "Daily Standup reminder bot for Lark/Feishu"
+license = "MIT"
+
+[[bin]]
+name = "standup-bot"
+path = "src/main.rs"
+
+[dependencies]
+larkoapi = "0.3"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
+chrono-tz = { version = "0.10", default-features = false }
+figment = { version = "0.10", features = ["env"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+async-trait = "0.1"
+askama = "0.15"

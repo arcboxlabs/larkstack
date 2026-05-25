@@ -1,0 +1,6 @@
+[target.aarch64-unknown-linux-musl]
+linker = "/opt/homebrew/bin/aarch64-linux-musl-gcc"
+
+[env]
+CC_aarch64_unknown_linux_musl = "/opt/homebrew/bin/aarch64-linux-musl-gcc"
+AR_aarch64_unknown_linux_musl = "/opt/homebrew/bin/aarch64-linux-musl-ar"

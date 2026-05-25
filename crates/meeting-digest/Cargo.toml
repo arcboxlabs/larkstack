@@ -1,0 +1,37 @@
+[package]
+name = "meeting-digest"
+version = "0.1.0"
+edition = "2024"
+description = "Auto-transcribe Lark/Feishu recorded meetings and post digest cards"
+license = "MIT"
+
+[[bin]]
+name = "meeting-digest"
+path = "src/main.rs"
+
+[features]
+default = ["whisper-api"]
+whisper-api = []
+whisper-cpp = ["dep:whisper-rs", "dep:hound"]
+
+[dependencies]
+larkoapi = "0.5"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "fs", "process", "io-util"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "multipart", "stream"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+chrono = { version = "0.4", default-features = false, features = ["clock", "serde"] }
+figment = { version = "0.10", features = ["env"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+async-trait = "0.1"
+thiserror = "2"
+anyhow = "1"
+bytes = "1"
+futures-util = { version = "0.3", default-features = false, features = ["std"] }
+tempfile = "3"
+url = "2"
+clap = { version = "4", features = ["derive"] }
+
+whisper-rs = { version = "0.14", optional = true }
+hound = { version = "3", optional = true }

@@ -1,0 +1,6 @@
+📋 {{ date }}
+{{ url }}
+未填写: {{ missing.len() }}
+{%- for item in missing %}
+  - {{ item }}
+{%- endfor %}
