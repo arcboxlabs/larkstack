@@ -176,6 +176,7 @@ fn build_issue_card(
     LarkMessage {
         msg_type: "interactive",
         card: LarkCard {
+            config: None,
             header: LarkHeader {
                 template: color.to_string(),
                 title: LarkTitle {
@@ -227,6 +228,7 @@ fn build_comment_card(
     LarkMessage {
         msg_type: "interactive",
         card: LarkCard {
+            config: None,
             header: LarkHeader {
                 template: "blue".to_string(),
                 title: LarkTitle {
@@ -288,6 +290,7 @@ pub fn build_assign_dm_card(event: &Event) -> LarkCard {
     elements.push(build_action_button(url));
 
     LarkCard {
+        config: None,
         header: LarkHeader {
             template: priority_color(priority).to_string(),
             title: LarkTitle {
@@ -342,6 +345,7 @@ pub fn build_preview_card(issue: &LinearIssueData) -> LarkCard {
     elements.push(build_action_button(&issue.url));
 
     LarkCard {
+        config: None,
         header: LarkHeader {
             template: color.to_string(),
             title: LarkTitle {

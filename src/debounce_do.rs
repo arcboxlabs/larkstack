@@ -101,7 +101,13 @@ impl DurableObject for DebounceObject {
                 .map(|s| s.to_string());
 
             if let (Some(id), Some(secret)) = (app_id, app_secret) {
-                let bot = crate::sinks::lark::LarkBotClient::new(id, secret, http);
+                let base_url = self
+                    .env
+                    .var("LARK_BASE_URL")
+                    .ok()
+                    .map(|v| v.to_string())
+                    .unwrap_or_else(|| "https://open.larksuite.com".to_string());
+                let bot = crate::sinks::lark::LarkBotClient::new(id, secret, base_url, http);
                 crate::sinks::lark::try_dm(&event, &bot, email).await;
             }
         }

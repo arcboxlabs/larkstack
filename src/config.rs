@@ -47,13 +47,31 @@ impl LinearConfig {
     }
 }
 
-#[derive(Debug, Default, Deserialize, Serialize)]
+fn default_lark_base_url() -> String {
+    "https://open.larksuite.com".to_string()
+}
+
+#[derive(Debug, Deserialize, Serialize)]
 pub struct LarkConfig {
     #[serde(default)]
     pub webhook_url: String,
     pub app_id: Option<String>,
     pub app_secret: Option<String>,
     pub verification_token: Option<String>,
+    #[serde(default = "default_lark_base_url")]
+    pub base_url: String,
+}
+
+impl Default for LarkConfig {
+    fn default() -> Self {
+        Self {
+            webhook_url: String::new(),
+            app_id: None,
+            app_secret: None,
+            verification_token: None,
+            base_url: default_lark_base_url(),
+        }
+    }
 }
 
 #[cfg(not(feature = "cf-worker"))]
@@ -81,6 +99,11 @@ impl LarkConfig {
                 .secret("LARK_VERIFICATION_TOKEN")
                 .ok()
                 .map(|s| s.to_string()),
+            base_url: env
+                .var("LARK_BASE_URL")
+                .ok()
+                .map(|v| v.to_string())
+                .unwrap_or_else(default_lark_base_url),
         })
     }
 }
@@ -90,7 +113,12 @@ impl LarkConfig {
         match (&self.app_id, &self.app_secret) {
             (Some(id), Some(secret)) => {
                 info!("lark bot configured – DM notifications enabled");
-                Some(LarkBotClient::new(id.clone(), secret.clone(), http.clone()))
+                Some(LarkBotClient::new(
+                    id.clone(),
+                    secret.clone(),
+                    self.base_url.clone(),
+                    http.clone(),
+                ))
             }
             _ => {
                 info!("LARK_APP_ID/LARK_APP_SECRET not set – DM notifications disabled");

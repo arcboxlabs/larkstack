@@ -26,6 +26,7 @@ native = [
     "reqwest/rustls-tls",
     "dep:figment",
     "dep:tracing-subscriber",
+    "dep:larkoapi",
 ]
 cf-worker = [
     "dep:worker",
@@ -57,6 +58,7 @@ figment = { version = "0.10", features = ["env"], optional = true }
 tracing-subscriber = { version = "0.3", features = [
     "env-filter",
 ], optional = true }
+larkoapi = { version = "0.5", optional = true }
 
 # cf-worker only
 worker = { version = "0.7", features = ["http"], optional = true }
