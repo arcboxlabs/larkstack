@@ -12,6 +12,18 @@ Polyglot repo with one Rust binary and a `crates/` directory of independent Lark
 
 Each `crates/*` member is an independent Cargo project (own `Cargo.lock`, gitignored) and is not part of any Cargo workspace.
 
+## Development Environment
+
+The repo ships a Nix flake (`flake.nix`) + `.envrc` driving **direnv + nix-direnv**.
+On entering the directory the dev shell auto-loads Rust stable (with `wasm32-unknown-unknown` target, clippy, rustfmt, rust-analyzer) and `protoc` (required by the `larkoapi` build script). One-time setup:
+
+```bash
+# Prereqs: Nix (with flakes), direnv, nix-direnv (`nix profile install nixpkgs#nix-direnv`)
+direnv allow            # in repo root, then `cd` triggers shell auto-load
+```
+
+If you prefer not to use direnv, `nix develop` enters the same shell ad hoc.
+
 ## Build Commands
 
 ```bash
@@ -20,8 +32,9 @@ cargo build --release                                       # native
 cargo fmt --all -- --check                                  # format
 cargo clippy --all-targets --all-features -- -D warnings    # lint
 cargo test
+cargo check --no-default-features --features cf-worker --lib  # cf-worker
 
-# Cloudflare Workers build
+# Cloudflare Workers full build
 cargo install worker-build && worker-build --release
 
 # meeting-digest
