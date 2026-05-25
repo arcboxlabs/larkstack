@@ -34,10 +34,7 @@ impl WsEventHandler for CommandBot {
         }
 
         let msg = event.pointer("/event/message")?;
-        let chat_type = msg
-            .get("chat_type")
-            .and_then(|v| v.as_str())
-            .unwrap_or("");
+        let chat_type = msg.get("chat_type").and_then(|v| v.as_str()).unwrap_or("");
         let msg_type = msg
             .get("message_type")
             .and_then(|v| v.as_str())
@@ -142,8 +139,7 @@ impl CommandBot {
             }
             "ensure" | "/ensure" => {
                 let date = resolve_date(second, tomorrow);
-                let doc =
-                    flow::ensure_document_for_date(&self.client, &self.cfg, date).await?;
+                let doc = flow::ensure_document_for_date(&self.client, &self.cfg, date).await?;
                 Ok(format!("✅ {date} 文档已就位\n{}", doc.url))
             }
             "announce" | "/announce" => {
@@ -220,4 +216,3 @@ fn resolve_date(arg: Option<&str>, default: NaiveDate) -> NaiveDate {
         Some(s) => NaiveDate::parse_from_str(s, "%Y-%m-%d").unwrap_or(default),
     }
 }
-

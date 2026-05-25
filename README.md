@@ -37,6 +37,7 @@
 ## Quick Start
 
 ```bash
+cd crates/linear-bridge
 export LINEAR_WEBHOOK_SECRET=your_secret
 export LARK_WEBHOOK_URL=https://open.larksuite.com/open-apis/bot/v2/hook/xxx
 cargo run
@@ -55,7 +56,7 @@ See [Configuration](./docs/getting-started/configuration.md) for the full enviro
 
 1. Create a Lark test group with a custom bot. Add a webhook in Linear.
 2. `ngrok http 3000` to get a public URL.
-3. `cargo run`, point the Linear webhook to `https://<NGROK_URL>/webhook`.
+3. `cd crates/linear-bridge && cargo run`, point the Linear webhook to `https://<NGROK_URL>/webhook`.
 
 ## License
 

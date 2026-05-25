@@ -14,6 +14,11 @@ pub mod debounce;
 #[cfg(feature = "cf-worker")]
 pub mod debounce_do;
 
+#[cfg(feature = "native")]
+mod run;
+#[cfg(feature = "native")]
+pub use run::run;
+
 #[cfg(feature = "cf-worker")]
 mod cf_entry {
     use std::sync::Arc;

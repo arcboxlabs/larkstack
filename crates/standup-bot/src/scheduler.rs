@@ -121,4 +121,3 @@ fn duration_until(hour: u32, minute: u32) -> Duration {
         });
     (target - now).to_std().unwrap_or(Duration::from_secs(60))
 }
-

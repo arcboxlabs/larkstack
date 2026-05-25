@@ -3,10 +3,10 @@ name: Rust CI
 on:
   push:
     branches: [main]
-    paths: ["**.rs", "Cargo.toml", "Cargo.lock", ".github/workflows/ci.yml"]
+    paths: ["**.rs", "**/Cargo.toml", "**/Cargo.lock", ".github/workflows/ci.yml"]
   pull_request:
     branches: [main]
-    paths: ["**.rs", "Cargo.toml", "Cargo.lock", ".github/workflows/ci.yml"]
+    paths: ["**.rs", "**/Cargo.toml", "**/Cargo.lock", ".github/workflows/ci.yml"]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -35,7 +35,8 @@ jobs:
         with:
           components: clippy
       - uses: Swatinem/rust-cache@v2
-      - run: cargo clippy --all-targets --all-features -- -D warnings
+      - run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+      - run: cargo clippy --workspace --all-targets -- -D warnings
 
   test:
     name: Test
@@ -44,4 +45,5 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - run: cargo test
+      - run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+      - run: cargo test --workspace

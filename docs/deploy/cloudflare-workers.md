@@ -16,6 +16,8 @@ Debounce runs on a Durable Object with alarms, so no persistent server is needed
   cargo install worker-build
   ```
 
+All commands below run from `crates/linear-bridge/`, where `wrangler.toml` lives.
+
 ## 1. Configure `wrangler.toml`
 
 Edit the `[vars]` section:
@@ -67,8 +69,8 @@ After deploying, Wrangler prints your Worker URL.
 
 | Service | URL |
 | :--- | :--- |
-| Linear Webhook | `https://larkstack.xxx.workers.dev/webhook` |
-| Lark Event Callback | `https://larkstack.xxx.workers.dev/lark/event` |
+| Linear Webhook | `https://linear-bridge.xxx.workers.dev/webhook` |
+| Lark Event Callback | `https://linear-bridge.xxx.workers.dev/lark/event` |
 
 ## Local development
 

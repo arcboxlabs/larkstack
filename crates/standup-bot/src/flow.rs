@@ -282,10 +282,7 @@ pub fn build_announce_card(doc_url: &str, date: NaiveDate) -> LarkCard {
             "明日",
             "Standup 文档已就位。请在 **明早 10:30 之前** 完成填写。".to_string(),
         ),
-        n if n > 0 => (
-            "",
-            format!("Standup 文档已就位 ({n} 天后),请按时填写。"),
-        ),
+        n if n > 0 => ("", format!("Standup 文档已就位 ({n} 天后),请按时填写。")),
         _ => ("", "Standup 文档链接见下。".to_string()),
     };
     let title = if title_prefix.is_empty() {
@@ -421,8 +418,7 @@ pub async fn check(
     let doc = ensure_document_for_date(client, cfg, date).await?;
     let missing = find_missing_user_ids(client, &doc.doc_id).await?;
 
-    let mut name_of: std::collections::HashMap<String, String> =
-        std::collections::HashMap::new();
+    let mut name_of: std::collections::HashMap<String, String> = std::collections::HashMap::new();
     if let Some(chat_id) = cfg.chat_id.as_deref()
         && let Ok(members) = client.list_chat_members(chat_id).await
     {

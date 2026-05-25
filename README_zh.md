@@ -37,6 +37,7 @@
 ## 快速开始
 
 ```bash
+cd crates/linear-bridge
 export LINEAR_WEBHOOK_SECRET=your_secret
 export LARK_WEBHOOK_URL=https://open.larksuite.com/open-apis/bot/v2/hook/xxx
 cargo run
@@ -55,7 +56,7 @@ cargo run
 
 1. 建一个飞书测试群，加自定义 Bot。在 Linear 新建 Webhook。
 2. `ngrok http 3000` 拿到公网地址。
-3. `cargo run`，把 ngrok 地址填进 Linear webhook。
+3. `cd crates/linear-bridge && cargo run`，把 ngrok 地址填进 Linear webhook。
 
 ## 许可证
 
