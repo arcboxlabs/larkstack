@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Events } from "./Events";
 
 type State = "starting" | "running" | "errored" | "stopped";
 
@@ -19,7 +20,7 @@ const STATE_COLORS: Record<State, string> = {
   stopped: "#6b7280",
 };
 
-export function App() {
+function StatusTable() {
   const [data, setData] = useState<StatusResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -40,8 +41,8 @@ export function App() {
   }, []);
 
   return (
-    <main>
-      <h1>larkstack console</h1>
+    <section>
+      <h2>Subsystems</h2>
       {error && <p className="error">Failed to load: {error}</p>}
       {!data && !error && <p>Loading…</p>}
       {data && (
@@ -81,6 +82,16 @@ export function App() {
           </tbody>
         </table>
       )}
+    </section>
+  );
+}
+
+export function App() {
+  return (
+    <main>
+      <h1>larkstack console</h1>
+      <StatusTable />
+      <Events />
     </main>
   );
 }

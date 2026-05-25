@@ -20,6 +20,18 @@ h1 {
   margin: 0 0 1.5rem;
 }
 
+h2 {
+  font-size: 1rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  opacity: 0.8;
+  margin: 2rem 0 0.75rem;
+}
+
+section + section {
+  margin-top: 1rem;
+}
+
 table {
   width: 100%;
   border-collapse: collapse;
@@ -56,4 +68,91 @@ th {
   border-radius: 50%;
   margin-right: 0.5rem;
   vertical-align: middle;
+}
+
+.events-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.events-header h2 {
+  margin: 2rem 0 0;
+}
+
+.filters {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  font-size: 0.85rem;
+}
+
+.filters select {
+  font: inherit;
+  padding: 0.15rem 0.35rem;
+}
+
+.conn {
+  font-variant-numeric: tabular-nums;
+}
+
+.conn.ok {
+  color: #22c55e;
+}
+
+.conn.down {
+  color: #f59e0b;
+}
+
+.lag {
+  color: #f59e0b;
+}
+
+.log {
+  list-style: none;
+  padding: 0;
+  margin: 0.75rem 0 0;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 0.82rem;
+  max-height: 60vh;
+  overflow-y: auto;
+  border: 1px solid color-mix(in srgb, canvastext 15%, transparent);
+  border-radius: 4px;
+}
+
+.log li {
+  display: grid;
+  grid-template-columns: auto auto auto 1fr auto;
+  gap: 0.6rem;
+  align-items: baseline;
+  padding: 0.3rem 0.6rem;
+  border-bottom: 1px solid color-mix(in srgb, canvastext 8%, transparent);
+}
+
+.log li:last-child {
+  border-bottom: none;
+}
+
+.log .ts {
+  font-variant-numeric: tabular-nums;
+}
+
+.log .level {
+  font-weight: 600;
+  min-width: 3.2rem;
+}
+
+.log .subsys {
+  opacity: 0.8;
+}
+
+.log .msg {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.log .fields {
+  font-size: 0.78rem;
 }

@@ -1,15 +1,25 @@
 //! Shared control-plane types.
 //!
-//! `ControlHandle` is cloned into each subsystem so it can report status back
-//! to the console. Later phases will extend this with an event bus and an
-//! action receiver, but phase 1 only needs status reporting.
+//! `ControlPlane` is a single in-process bus:
+//!
+//! - **Status** — each subsystem reports liveness through its `ControlHandle`.
+//!   The console reads a snapshot via [`ControlPlane::snapshot`].
+//! - **Events** — a `tokio::sync::broadcast` channel multiplexes tracing
+//!   records to any subscriber (the console's SSE handler is the first
+//!   consumer). The [`tracing_layer`] feeds the bus automatically; subsystem
+//!   code does not need to change.
 
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::SystemTime;
 
 use serde::Serialize;
-use tokio::sync::RwLock;
+use tokio::sync::{RwLock, broadcast};
+
+mod tracing_layer;
+
+pub use tracing_layer::ControlLayer;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -38,9 +48,64 @@ impl Status {
     }
 }
 
-#[derive(Clone, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Level {
+    Trace,
+    Debug,
+    Info,
+    Warn,
+    Error,
+}
+
+impl From<tracing::Level> for Level {
+    fn from(l: tracing::Level) -> Self {
+        match l {
+            tracing::Level::TRACE => Level::Trace,
+            tracing::Level::DEBUG => Level::Debug,
+            tracing::Level::INFO => Level::Info,
+            tracing::Level::WARN => Level::Warn,
+            tracing::Level::ERROR => Level::Error,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct Event {
+    pub id: u64,
+    pub level: Level,
+    pub subsystem: Option<String>,
+    pub target: String,
+    pub message: String,
+    pub fields: serde_json::Map<String, serde_json::Value>,
+    #[serde(with = "ts_millis")]
+    pub timestamp: SystemTime,
+}
+
+const EVENT_BUFFER: usize = 512;
+
+#[derive(Clone)]
 pub struct ControlPlane {
-    statuses: Arc<RwLock<HashMap<String, Status>>>,
+    inner: Arc<Inner>,
+}
+
+struct Inner {
+    statuses: RwLock<HashMap<String, Status>>,
+    events: broadcast::Sender<Event>,
+    next_id: AtomicU64,
+}
+
+impl Default for ControlPlane {
+    fn default() -> Self {
+        let (events, _) = broadcast::channel(EVENT_BUFFER);
+        Self {
+            inner: Arc::new(Inner {
+                statuses: RwLock::new(HashMap::new()),
+                events,
+                next_id: AtomicU64::new(1),
+            }),
+        }
+    }
 }
 
 impl ControlPlane {
@@ -56,7 +121,24 @@ impl ControlPlane {
     }
 
     pub async fn snapshot(&self) -> HashMap<String, Status> {
-        self.statuses.read().await.clone()
+        self.inner.statuses.read().await.clone()
+    }
+
+    /// Subscribe to the event broadcast. Slow consumers may observe
+    /// `RecvError::Lagged` and lose messages older than the buffer.
+    pub fn subscribe(&self) -> broadcast::Receiver<Event> {
+        self.inner.events.subscribe()
+    }
+
+    /// Emit a control-plane event. Build the event with [`Self::next_event_id`]
+    /// so id ordering matches emission order.
+    pub fn emit(&self, event: Event) {
+        // Errors only happen when no receivers are listening; that's fine.
+        let _ = self.inner.events.send(event);
+    }
+
+    pub fn next_event_id(&self) -> u64 {
+        self.inner.next_id.fetch_add(1, Ordering::Relaxed)
     }
 }
 
@@ -73,6 +155,7 @@ impl ControlHandle {
 
     pub async fn set_status(&self, status: Status) {
         self.plane
+            .inner
             .statuses
             .write()
             .await

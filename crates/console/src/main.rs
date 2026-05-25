@@ -1,10 +1,23 @@
+use std::convert::Infallible;
 use std::sync::Arc;
+use std::time::Duration;
 
 use anyhow::Context;
-use axum::{Json, Router, extract::State, http::StatusCode, routing::get};
-use control::ControlPlane;
+use axum::{
+    Json, Router,
+    extract::State,
+    http::StatusCode,
+    response::sse::{Event as SseEvent, KeepAlive, Sse},
+    routing::get,
+};
+use control::{ControlLayer, ControlPlane};
+use futures_util::stream::Stream;
 use linear_bridge::config::AppState as LinearBridgeState;
+use tokio_stream::StreamExt;
+use tokio_stream::wrappers::{BroadcastStream, errors::BroadcastStreamRecvError};
 use tracing::{error, info};
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::util::SubscriberInitExt;
 
 mod assets;
 
@@ -15,13 +28,8 @@ struct ConsoleState {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()),
-        )
-        .init();
-
     let control = ControlPlane::new();
+    init_tracing(&control);
 
     spawn_linear_bridge(&control);
 
@@ -31,6 +39,7 @@ async fn main() -> anyhow::Result<()> {
 
     let app = Router::new()
         .route("/api/status", get(status))
+        .route("/api/events", get(events))
         .route("/api/health", get(|| async { "ok" }))
         .fallback(assets::serve)
         .with_state(state);
@@ -46,6 +55,16 @@ async fn main() -> anyhow::Result<()> {
     info!("console listening on http://{addr}");
     axum::serve(listener, app).await?;
     Ok(())
+}
+
+fn init_tracing(control: &ControlPlane) {
+    let filter =
+        tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into());
+    tracing_subscriber::registry()
+        .with(filter)
+        .with(tracing_subscriber::fmt::layer())
+        .with(ControlLayer::new(control.clone()))
+        .init();
 }
 
 fn spawn_linear_bridge(control: &ControlPlane) {
@@ -65,4 +84,19 @@ async fn status(State(s): State<ConsoleState>) -> (StatusCode, Json<serde_json::
         StatusCode::OK,
         Json(serde_json::json!({ "subsystems": snap })),
     )
+}
+
+async fn events(
+    State(s): State<ConsoleState>,
+) -> Sse<impl Stream<Item = Result<SseEvent, Infallible>>> {
+    let stream = BroadcastStream::new(s.control.subscribe()).filter_map(|res| match res {
+        Ok(ev) => Some(Ok(SseEvent::default()
+            .id(ev.id.to_string())
+            .json_data(&ev)
+            .unwrap_or_else(|_| SseEvent::default()))),
+        Err(BroadcastStreamRecvError::Lagged(n)) => {
+            Some(Ok(SseEvent::default().event("lagged").data(n.to_string())))
+        }
+    });
+    Sse::new(stream).keep_alive(KeepAlive::new().interval(Duration::from_secs(15)))
 }
