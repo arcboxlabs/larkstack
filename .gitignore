@@ -38,7 +38,10 @@ site/
 .zensical-cache/__pycache__/
 
 # ------------------------------------------------------
-# 7. direnv + nix-direnv cache (flake.nix is tracked)
+# 7. direnv + devenv state (devenv.nix / devenv.yaml are tracked)
 # ------------------------------------------------------
 .direnv/
 .envrc.local
+.devenv/
+.devenv.flake.nix
+devenv.local.nix

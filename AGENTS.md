@@ -14,15 +14,17 @@ Each `crates/*` member is an independent Cargo project (own `Cargo.lock`, gitign
 
 ## Development Environment
 
-The repo ships a Nix flake (`flake.nix`) + `.envrc` driving **direnv + nix-direnv**.
-On entering the directory the dev shell auto-loads Rust stable (with `wasm32-unknown-unknown` target, clippy, rustfmt, rust-analyzer) and `protoc` (required by the `larkoapi` build script). One-time setup:
+The repo uses **[devenv](https://devenv.sh)** (`devenv.nix` + `devenv.yaml`) with **direnv** for auto-activation.
+On entering the directory the dev shell auto-loads Rust stable (with `wasm32-unknown-unknown` target, clippy, rustfmt, rust-analyzer) and `protoc` (required by the `larkoapi` build script).
 
 ```bash
-# Prereqs: Nix (with flakes), direnv, nix-direnv (`nix profile install nixpkgs#nix-direnv`)
-direnv allow            # in repo root, then `cd` triggers shell auto-load
+# Prereqs: Nix (flakes enabled), direnv, devenv (`nix profile install nixpkgs#devenv`)
+direnv allow            # one-time, then `cd` triggers shell auto-load
 ```
 
-If you prefer not to use direnv, `nix develop` enters the same shell ad hoc.
+Without direnv, drop into the same shell via `devenv shell`.
+
+Note: `.envrc` calls `eval "$(devenv print-dev-env)"` directly instead of `use devenv` to sidestep a SIGABRT bug in devenv 2.1.2's `direnv-export` subcommand on macOS.
 
 ## Build Commands
 
