@@ -66,4 +66,60 @@ impl AppConfig {
             standup: StandupConfig::from_env()?,
         })
     }
+
+    /// Build from a full config TOML containing a `[standup-bot]` section.
+    /// The env loader runs first; TOML overlays per field.
+    pub fn from_toml(full_toml: &str) -> Result<Self, Box<figment::Error>> {
+        #[derive(Default, Deserialize)]
+        struct TopLevel {
+            #[serde(rename = "standup-bot", default)]
+            section: Section,
+        }
+        #[derive(Default, Deserialize)]
+        struct Section {
+            #[serde(default)]
+            lark: TomlLark,
+            #[serde(default)]
+            standup: TomlStandup,
+        }
+        #[derive(Default, Deserialize)]
+        struct TomlLark {
+            app_id: Option<String>,
+            app_secret: Option<String>,
+            base_url: Option<String>,
+        }
+        #[derive(Default, Deserialize)]
+        struct TomlStandup {
+            enabled: Option<bool>,
+            chat_id: Option<String>,
+            folder_token: Option<String>,
+        }
+
+        let top: TopLevel =
+            toml::from_str(full_toml).map_err(|e| Box::new(figment::Error::from(e.to_string())))?;
+
+        let mut cfg = Self::from_env()?;
+
+        if let Some(v) = top.section.lark.app_id {
+            cfg.lark.app_id = v;
+        }
+        if let Some(v) = top.section.lark.app_secret {
+            cfg.lark.app_secret = v;
+        }
+        if let Some(v) = top.section.lark.base_url {
+            cfg.lark.base_url = v;
+        }
+
+        if let Some(v) = top.section.standup.enabled {
+            cfg.standup.enabled = v;
+        }
+        if top.section.standup.chat_id.is_some() {
+            cfg.standup.chat_id = top.section.standup.chat_id;
+        }
+        if top.section.standup.folder_token.is_some() {
+            cfg.standup.folder_token = top.section.standup.folder_token;
+        }
+
+        Ok(cfg)
+    }
 }

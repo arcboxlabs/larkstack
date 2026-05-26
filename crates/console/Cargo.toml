@@ -35,3 +35,5 @@ control = { path = "../control" }
 linear-bridge = { path = "../linear-bridge", default-features = false, features = [
     "native",
 ] }
+meeting-digest = { path = "../meeting-digest" }
+standup-bot = { path = "../standup-bot" }

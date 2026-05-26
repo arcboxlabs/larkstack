@@ -12,10 +12,15 @@ use axum::{
     response::sse::{Event as SseEvent, KeepAlive, Sse},
     routing::get,
 };
-use control::{ActionEnvelope, ControlLayer, ControlPlane, DispatchError, EventStore};
+use control::{
+    ActionEnvelope, ControlHandle, ControlLayer, ControlPlane, DispatchError, EventStore,
+};
 use futures_util::stream::{Stream, StreamExt};
 use linear_bridge::config::AppState as LinearBridgeState;
+use meeting_digest::AppConfig as MeetingDigestCfg;
 use serde::Deserialize;
+use standup_bot::AppConfig as StandupCfg;
+use tokio::sync::mpsc;
 use tokio_stream::wrappers::{BroadcastStream, errors::BroadcastStreamRecvError};
 use tracing::{error, info, warn};
 use tracing_subscriber::layer::SubscriberExt;
@@ -28,25 +33,52 @@ const BACKFILL_LIMIT: usize = 200;
 const DEFAULT_CONFIG: &str = r#"# larkstack-console config
 #
 # Each subsystem owns a top-level section. Values left empty fall back to the
-# matching environment variable (LINEAR_*, LARK_*, PORT, DEBOUNCE_DELAY_MS),
-# so secrets can stay in the environment while the rest is edited from the UI.
+# matching environment variable (LINEAR_*, LARK_*, STT_*, DIGEST_*, STANDUP_*,
+# PORT, DEBOUNCE_DELAY_MS), so secrets can stay in the environment while ops
+# fields are edited from the UI.
 
 [linear-bridge]
-
 [linear-bridge.linear]
 # webhook_secret = ""
 # api_key = ""
-
 [linear-bridge.lark]
 # webhook_url = ""
 # app_id = ""
 # app_secret = ""
 # verification_token = ""
 # base_url = "https://open.larksuite.com"
-
 [linear-bridge.server]
 # port = 3000
 # debounce_delay_ms = 5000
+
+[meeting-digest]
+[meeting-digest.lark]
+# app_id = ""
+# app_secret = ""
+# base_url = "https://open.larksuite.com"
+[meeting-digest.stt]
+# provider = "whisper_api"  # or "whisper_cpp"
+# language = "auto"
+# whisper_api_base = "https://api.openai.com/v1"
+# whisper_api_model = "whisper-1"
+# whisper_api_key = ""
+# whisper_cpp_model = ""
+# whisper_cpp_threads = 0
+[meeting-digest.digest]
+# folder_token = ""
+# fallback_chat_id = ""
+# work_dir = ""
+# ffmpeg = "ffmpeg"
+
+[standup-bot]
+[standup-bot.lark]
+# app_id = ""
+# app_secret = ""
+# base_url = "https://open.larksuite.com"
+[standup-bot.standup]
+# enabled = false
+# chat_id = ""
+# folder_token = ""
 "#;
 
 #[derive(Clone)]
@@ -76,7 +108,9 @@ async fn main() -> anyhow::Result<()> {
 
     init_tracing(&control);
     spawn_persistence(&control, &store);
-    spawn_linear_bridge_supervisor(&control);
+    supervise(control.clone(), "linear-bridge", spawn_linear_bridge);
+    supervise(control.clone(), "meeting-digest", spawn_meeting_digest);
+    supervise(control.clone(), "standup-bot", spawn_standup_bot);
 
     let state = ConsoleState {
         control: control.clone(),
@@ -152,53 +186,35 @@ fn spawn_persistence(control: &ControlPlane, store: &EventStore) {
     });
 }
 
-/// Runs `linear_bridge::run` in a loop, restarting whenever the config TOML
-/// changes. Aborts the in-flight task on change; new state is built from the
-/// updated TOML before respawn.
-fn spawn_linear_bridge_supervisor(control: &ControlPlane) {
-    let control = control.clone();
-    let handle = control.handle("linear-bridge");
+/// Generic supervisor: parses TOML, spawns a subsystem task, restarts on every
+/// config change (broadcast via `ControlPlane`). `spawn_task` is responsible
+/// for parsing its own slice of the TOML, building state, and running the
+/// subsystem; the supervisor only orchestrates lifecycle.
+fn supervise<F>(control: ControlPlane, name: &'static str, spawn_task: F)
+where
+    F: Fn(
+            Arc<String>,
+            ControlHandle,
+            mpsc::UnboundedReceiver<ActionEnvelope>,
+        ) -> tokio::task::JoinHandle<()>
+        + Send
+        + 'static,
+{
+    let handle = control.handle(name);
     let mut config_rx = control.watch_config();
-
     tokio::spawn(async move {
         loop {
             let toml = (*config_rx.borrow_and_update()).clone();
-            let state = match LinearBridgeState::from_toml(&toml) {
-                Ok(s) => Arc::new(s),
-                Err(e) => {
-                    error!("linear-bridge config invalid: {e:#}");
-                    handle.errored(format!("config: {e:#}")).await;
-                    if config_rx.changed().await.is_err() {
-                        break;
-                    }
-                    continue;
-                }
-            };
-
-            let h = handle.clone();
-            let action_rx = control.register_actions("linear-bridge").await;
-            let state_for_actions = state.clone();
-            let mut task = tokio::spawn(async move {
-                tokio::select! {
-                    _ = linear_bridge::handle_actions(state_for_actions, action_rx) => {}
-                    res = linear_bridge::run(state, h.clone()) => {
-                        if let Err(e) = res {
-                            error!("linear-bridge stopped: {e:#}");
-                            h.errored(format!("{e:#}")).await;
-                        }
-                    }
-                }
-            });
-
+            let action_rx = control.register_actions(name).await;
+            let mut task = spawn_task(toml, handle.clone(), action_rx);
             tokio::select! {
                 _ = config_rx.changed() => {
-                    info!("config changed; restarting linear-bridge");
+                    info!(subsystem = name, "config changed; restarting");
                     task.abort();
                     let _ = task.await;
                 }
                 res = &mut task => {
                     let _ = res;
-                    // task exited on its own; wait for next config change before retry.
                     if config_rx.changed().await.is_err() {
                         break;
                     }
@@ -206,6 +222,95 @@ fn spawn_linear_bridge_supervisor(control: &ControlPlane) {
             }
         }
     });
+}
+
+fn spawn_linear_bridge(
+    toml: Arc<String>,
+    handle: ControlHandle,
+    action_rx: mpsc::UnboundedReceiver<ActionEnvelope>,
+) -> tokio::task::JoinHandle<()> {
+    tokio::spawn(async move {
+        let state = match LinearBridgeState::from_toml(&toml) {
+            Ok(s) => Arc::new(s),
+            Err(e) => {
+                error!("linear-bridge config invalid: {e:#}");
+                handle.errored(format!("config: {e:#}")).await;
+                return;
+            }
+        };
+        let state_for_actions = state.clone();
+        let h = handle.clone();
+        tokio::select! {
+            _ = linear_bridge::handle_actions(state_for_actions, action_rx) => {}
+            res = linear_bridge::run(state, h.clone()) => {
+                if let Err(e) = res {
+                    error!("linear-bridge stopped: {e:#}");
+                    h.errored(format!("{e:#}")).await;
+                }
+            }
+        }
+    })
+}
+
+fn spawn_meeting_digest(
+    toml: Arc<String>,
+    handle: ControlHandle,
+    action_rx: mpsc::UnboundedReceiver<ActionEnvelope>,
+) -> tokio::task::JoinHandle<()> {
+    tokio::spawn(async move {
+        let cfg = match MeetingDigestCfg::from_toml(&toml) {
+            Ok(c) => c,
+            Err(e) => {
+                error!("meeting-digest config invalid: {e:#}");
+                handle.errored(format!("config: {e:#}")).await;
+                return;
+            }
+        };
+        let pipeline = match meeting_digest::build_pipeline(&cfg) {
+            Ok(p) => p,
+            Err(e) => {
+                error!("meeting-digest build failed: {e:#}");
+                handle.errored(format!("{e:#}")).await;
+                return;
+            }
+        };
+        let actions_pipeline = pipeline.clone();
+        tokio::select! {
+            _ = meeting_digest::handle_actions(actions_pipeline, action_rx) => {}
+            _ = meeting_digest::run_ws(&cfg, pipeline, handle.clone()) => {}
+        }
+    })
+}
+
+fn spawn_standup_bot(
+    toml: Arc<String>,
+    handle: ControlHandle,
+    action_rx: mpsc::UnboundedReceiver<ActionEnvelope>,
+) -> tokio::task::JoinHandle<()> {
+    tokio::spawn(async move {
+        let cfg = match StandupCfg::from_toml(&toml) {
+            Ok(c) => c,
+            Err(e) => {
+                error!("standup-bot config invalid: {e:#}");
+                handle.errored(format!("config: {e:#}")).await;
+                return;
+            }
+        };
+        let bot = match standup_bot::build_bot(&cfg) {
+            Ok(b) => b,
+            Err(e) => {
+                error!("standup-bot build failed: {e:#}");
+                handle.errored(format!("{e:#}")).await;
+                return;
+            }
+        };
+        let standup_cfg = cfg.standup.clone();
+        let actions_bot = bot.clone();
+        tokio::select! {
+            _ = standup_bot::handle_actions(standup_cfg, actions_bot, action_rx) => {}
+            _ = standup_bot::run_with_bot(cfg, bot, handle.clone()) => {}
+        }
+    })
 }
 
 async fn status(State(s): State<ConsoleState>) -> (StatusCode, Json<serde_json::Value>) {

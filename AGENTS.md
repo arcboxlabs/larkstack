@@ -89,7 +89,9 @@ Event log retention: the SQLite store keeps the most recent 10,000 events (rolli
 
 Config model: a single `config.toml` lives at `$CONSOLE_DATA_DIR/config.toml`. Each subsystem owns a top-level section (e.g. `[linear-bridge]`). Values left empty fall back to the matching env vars (`LINEAR_*`, `LARK_*`, `PORT`, etc.) so secrets can stay in the environment while ops fields are edited from the UI. `linear_bridge::config::AppState::from_toml(full_toml)` is the entry point; the env-var loader is the fallback per-field.
 
-Phase status: `linear-bridge` is wired (Phases 1–2), tracing → SSE event stream is live (Phase 3), events persist to SQLite with `?since=` backfill (Phase 4), config edit + live reload (Phase 5), actions framework with linear-bridge `ping`/`test-lark` (Phase 6). Still upcoming: meeting-digest / standup-bot ingestion (7), richer UI (8).
+Phase status: `linear-bridge` is wired (Phases 1–2), tracing → SSE event stream is live (Phase 3), events persist to SQLite with `?since=` backfill (Phase 4), config edit + live reload (Phase 5), actions framework with linear-bridge `ping`/`test-lark` (Phase 6), `meeting-digest` and `standup-bot` supervised under the console with actions for `process-meeting` and `announce`/`ensure`/`remind`/`urgent`/`urgent-user`/`check` (Phase 7). Still upcoming: richer UI (Phase 8).
+
+Each subsystem exposes `build_*(cfg) -> Result<Service>` + `run_*(...)` so the console can grab the action service handle (pipeline/bot/state) before the long-running loop begins. `standup-bot` and `meeting-digest` follow the same `from_toml(full_toml)` overlay-on-env pattern as `linear-bridge`.
 
 ## crates/meeting-digest
 

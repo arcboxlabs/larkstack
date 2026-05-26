@@ -155,4 +155,99 @@ impl AppConfig {
             digest: DigestConfig::from_env()?,
         })
     }
+
+    /// Build from a full config TOML containing a `[meeting-digest]` section.
+    /// Any field omitted from the TOML falls back to its env-var equivalent;
+    /// the env loader runs first and the TOML section overlays on top.
+    pub fn from_toml(full_toml: &str) -> Result<Self, Box<figment::Error>> {
+        #[derive(Default, Deserialize)]
+        struct TopLevel {
+            #[serde(rename = "meeting-digest", default)]
+            section: Section,
+        }
+        #[derive(Default, Deserialize)]
+        struct Section {
+            #[serde(default)]
+            lark: TomlLark,
+            #[serde(default)]
+            stt: TomlStt,
+            #[serde(default)]
+            digest: TomlDigest,
+        }
+        #[derive(Default, Deserialize)]
+        struct TomlLark {
+            app_id: Option<String>,
+            app_secret: Option<String>,
+            base_url: Option<String>,
+        }
+        #[derive(Default, Deserialize)]
+        struct TomlStt {
+            provider: Option<SttProvider>,
+            language: Option<String>,
+            whisper_api_base: Option<String>,
+            whisper_api_model: Option<String>,
+            whisper_api_key: Option<String>,
+            whisper_cpp_model: Option<String>,
+            whisper_cpp_threads: Option<u32>,
+        }
+        #[derive(Default, Deserialize)]
+        struct TomlDigest {
+            folder_token: Option<String>,
+            fallback_chat_id: Option<String>,
+            work_dir: Option<String>,
+            ffmpeg: Option<String>,
+        }
+
+        let top: TopLevel =
+            toml::from_str(full_toml).map_err(|e| Box::new(figment::Error::from(e.to_string())))?;
+
+        let mut cfg = Self::from_env()?;
+
+        if let Some(v) = top.section.lark.app_id {
+            cfg.lark.app_id = v;
+        }
+        if let Some(v) = top.section.lark.app_secret {
+            cfg.lark.app_secret = v;
+        }
+        if let Some(v) = top.section.lark.base_url {
+            cfg.lark.base_url = v;
+        }
+
+        if let Some(v) = top.section.stt.provider {
+            cfg.stt.provider = v;
+        }
+        if let Some(v) = top.section.stt.language {
+            cfg.stt.language = v;
+        }
+        if let Some(v) = top.section.stt.whisper_api_base {
+            cfg.stt.whisper_api_base = v;
+        }
+        if let Some(v) = top.section.stt.whisper_api_model {
+            cfg.stt.whisper_api_model = v;
+        }
+        if let Some(v) = top.section.stt.whisper_api_key {
+            cfg.stt.whisper_api_key = v;
+        }
+        if let Some(v) = top.section.stt.whisper_cpp_model {
+            cfg.stt.whisper_cpp_model = v;
+        }
+        if let Some(v) = top.section.stt.whisper_cpp_threads {
+            cfg.stt.whisper_cpp_threads = v;
+        }
+
+        if let Some(v) = top.section.digest.folder_token {
+            cfg.digest.folder_token = v;
+        }
+        if top.section.digest.fallback_chat_id.is_some() {
+            cfg.digest.fallback_chat_id = top.section.digest.fallback_chat_id;
+        }
+        if top.section.digest.work_dir.is_some() {
+            cfg.digest.work_dir = top.section.digest.work_dir;
+        }
+        if let Some(v) = top.section.digest.ffmpeg {
+            cfg.digest.ffmpeg = v;
+        }
+
+        Ok(cfg)
+    }
 }

@@ -10,6 +10,16 @@ const CATALOG: Record<string, Action[]> = {
     { name: "ping", description: "Emit a pong log event (smoke test the action plumbing)" },
     { name: "test-lark", description: "Post a test message to the configured Lark webhook" },
   ],
+  "standup-bot": [
+    { name: "announce", description: "Ensure tomorrow's doc and post the announcement card" },
+    { name: "ensure", description: "Create tomorrow's doc + share with chat (no card)" },
+    { name: "remind", description: "DM everyone still empty for today's doc" },
+    { name: "urgent", description: "Remind + in-app urgent escalation for today's doc" },
+    { name: "check", description: "List missing fillers for today (read-only)" },
+  ],
+  "meeting-digest": [
+    // process-meeting needs params (meeting_id); reachable via curl, not button.
+  ],
 };
 
 type Result =
@@ -63,6 +73,11 @@ export function Actions() {
       {Object.entries(CATALOG).map(([subsystem, actions]) => (
         <div key={subsystem} className="actions-group">
           <div className="actions-subsystem">{subsystem}</div>
+          {actions.length === 0 ? (
+            <div className="muted" style={{ fontSize: "0.8rem" }}>
+              no parameterless actions — see <code>/api/actions/{subsystem}/&lt;name&gt;</code>
+            </div>
+          ) : (
           <div className="actions-row">
             {actions.map((a) => {
               const key = `${subsystem}/${a.name}`;
@@ -83,6 +98,7 @@ export function Actions() {
               );
             })}
           </div>
+          )}
         </div>
       ))}
     </section>
