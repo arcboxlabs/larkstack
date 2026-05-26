@@ -14,3 +14,4 @@ tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 rusqlite = { version = "0.38", features = ["bundled"] }
 anyhow = { workspace = true }
+thiserror = { workspace = true }

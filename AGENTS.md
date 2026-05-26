@@ -75,6 +75,7 @@ Routes:
 - `GET /api/events` — SSE stream of `Event { id, level, subsystem, target, message, fields, timestamp }`. Honors the `Last-Event-ID` header and a `?since=<id>` query for backfill. Without either, replays the most recent 200 events from SQLite then streams live.
 - `GET /api/config` — current TOML as `application/toml`. Bootstrapped from a default scaffold on first run.
 - `PUT /api/config` — body is the new TOML. Validates by parsing; on success writes the file and broadcasts via `ControlPlane`'s watch channel. Each subsystem supervisor sees the change, aborts its task, and respawns with the new state.
+- `POST /api/actions/{subsystem}/{action}` — fire-and-forget action dispatch. Body is the optional `params` JSON. Returns `202` on dispatch, `404` for unknown subsystem, `503` if registered subsystem's receiver is closed. Result/error appears in the SSE event stream — each subsystem emits a tracing event on action receipt.
 - `GET /api/health` — `"ok"`
 - `GET /*` — embedded React SPA (falls back to `index.html`)
 
@@ -88,7 +89,7 @@ Event log retention: the SQLite store keeps the most recent 10,000 events (rolli
 
 Config model: a single `config.toml` lives at `$CONSOLE_DATA_DIR/config.toml`. Each subsystem owns a top-level section (e.g. `[linear-bridge]`). Values left empty fall back to the matching env vars (`LINEAR_*`, `LARK_*`, `PORT`, etc.) so secrets can stay in the environment while ops fields are edited from the UI. `linear_bridge::config::AppState::from_toml(full_toml)` is the entry point; the env-var loader is the fallback per-field.
 
-Phase status: `linear-bridge` is wired (Phases 1–2), tracing → SSE event stream is live (Phase 3), events persist to SQLite with `?since=` backfill (Phase 4), config edit + live reload (Phase 5). Still upcoming: actions (6), meeting-digest / standup-bot ingestion (7), richer UI (8).
+Phase status: `linear-bridge` is wired (Phases 1–2), tracing → SSE event stream is live (Phase 3), events persist to SQLite with `?since=` backfill (Phase 4), config edit + live reload (Phase 5), actions framework with linear-bridge `ping`/`test-lark` (Phase 6). Still upcoming: meeting-digest / standup-bot ingestion (7), richer UI (8).
 
 ## crates/meeting-digest
 

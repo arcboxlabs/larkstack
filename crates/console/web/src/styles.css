@@ -189,3 +189,50 @@ th {
   opacity: 0.4;
   cursor: not-allowed;
 }
+
+.actions-group {
+  margin-bottom: 0.75rem;
+}
+
+.actions-subsystem {
+  font-size: 0.85rem;
+  opacity: 0.7;
+  margin-bottom: 0.4rem;
+}
+
+.actions-row {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.action-btn {
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 0.3rem 0.7rem;
+  border: 1px solid color-mix(in srgb, canvastext 30%, transparent);
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+}
+
+.action-btn:hover:not(:disabled) {
+  border-color: currentColor;
+}
+
+.action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.action-btn.ok {
+  color: #22c55e;
+  border-color: #22c55e;
+}
+
+.action-btn.error {
+  color: #ef4444;
+  border-color: #ef4444;
+}

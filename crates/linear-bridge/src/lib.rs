@@ -15,6 +15,11 @@ pub mod debounce;
 pub mod debounce_do;
 
 #[cfg(feature = "native")]
+mod actions;
+#[cfg(feature = "native")]
+pub use actions::handle_actions;
+
+#[cfg(feature = "native")]
 mod run;
 #[cfg(feature = "native")]
 pub use run::run;

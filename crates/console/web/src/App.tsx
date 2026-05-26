@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Actions } from "./Actions";
 import { Config } from "./Config";
 import { Events } from "./Events";
 
@@ -92,6 +93,7 @@ export function App() {
     <main>
       <h1>larkstack console</h1>
       <StatusTable />
+      <Actions />
       <Config />
       <Events />
     </main>

@@ -14,8 +14,8 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::SystemTime;
 
-use serde::Serialize;
-use tokio::sync::{RwLock, broadcast, watch};
+use serde::{Deserialize, Serialize};
+use tokio::sync::{RwLock, broadcast, mpsc, watch};
 
 mod store;
 mod tracing_layer;
@@ -96,6 +96,7 @@ struct Inner {
     events: broadcast::Sender<Event>,
     next_id: AtomicU64,
     config_tx: watch::Sender<Arc<String>>,
+    actions: RwLock<HashMap<String, mpsc::UnboundedSender<ActionEnvelope>>>,
 }
 
 impl Default for ControlPlane {
@@ -108,6 +109,7 @@ impl Default for ControlPlane {
                 events,
                 next_id: AtomicU64::new(1),
                 config_tx,
+                actions: RwLock::new(HashMap::new()),
             }),
         }
     }
@@ -169,6 +171,51 @@ impl ControlPlane {
     pub fn watch_config(&self) -> watch::Receiver<Arc<String>> {
         self.inner.config_tx.subscribe()
     }
+
+    /// Register an action sink for `subsystem`. Replaces any prior registration
+    /// (e.g. when the subsystem is restarted by the supervisor); dropping the
+    /// returned receiver effectively un-registers the subsystem.
+    pub async fn register_actions(
+        &self,
+        subsystem: &str,
+    ) -> mpsc::UnboundedReceiver<ActionEnvelope> {
+        let (tx, rx) = mpsc::unbounded_channel();
+        self.inner
+            .actions
+            .write()
+            .await
+            .insert(subsystem.to_string(), tx);
+        rx
+    }
+
+    /// Send an action envelope to the named subsystem. Fails if the subsystem
+    /// has never registered or its receiver has been dropped.
+    pub async fn dispatch(
+        &self,
+        subsystem: &str,
+        envelope: ActionEnvelope,
+    ) -> Result<(), DispatchError> {
+        let actions = self.inner.actions.read().await;
+        let tx = actions
+            .get(subsystem)
+            .ok_or(DispatchError::UnknownSubsystem)?;
+        tx.send(envelope).map_err(|_| DispatchError::Closed)
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ActionEnvelope {
+    pub name: String,
+    #[serde(default)]
+    pub params: serde_json::Value,
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum DispatchError {
+    #[error("unknown subsystem")]
+    UnknownSubsystem,
+    #[error("subsystem not running")]
+    Closed,
 }
 
 #[derive(Clone)]

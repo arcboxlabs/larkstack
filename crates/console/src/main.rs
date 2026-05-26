@@ -4,6 +4,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Context;
+use axum::extract::Path as AxPath;
 use axum::{
     Json, Router,
     extract::{Query, State},
@@ -11,7 +12,7 @@ use axum::{
     response::sse::{Event as SseEvent, KeepAlive, Sse},
     routing::get,
 };
-use control::{ControlLayer, ControlPlane, EventStore};
+use control::{ActionEnvelope, ControlLayer, ControlPlane, DispatchError, EventStore};
 use futures_util::stream::{Stream, StreamExt};
 use linear_bridge::config::AppState as LinearBridgeState;
 use serde::Deserialize;
@@ -87,6 +88,10 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/status", get(status))
         .route("/api/events", get(events))
         .route("/api/config", get(get_config).put(put_config))
+        .route(
+            "/api/actions/{subsystem}/{action}",
+            axum::routing::post(dispatch_action),
+        )
         .route("/api/health", get(|| async { "ok" }))
         .fallback(assets::serve)
         .with_state(state);
@@ -171,10 +176,17 @@ fn spawn_linear_bridge_supervisor(control: &ControlPlane) {
             };
 
             let h = handle.clone();
+            let action_rx = control.register_actions("linear-bridge").await;
+            let state_for_actions = state.clone();
             let mut task = tokio::spawn(async move {
-                if let Err(e) = linear_bridge::run(state, h.clone()).await {
-                    error!("linear-bridge stopped: {e:#}");
-                    h.errored(format!("{e:#}")).await;
+                tokio::select! {
+                    _ = linear_bridge::handle_actions(state_for_actions, action_rx) => {}
+                    res = linear_bridge::run(state, h.clone()) => {
+                        if let Err(e) = res {
+                            error!("linear-bridge stopped: {e:#}");
+                            h.errored(format!("{e:#}")).await;
+                        }
+                    }
                 }
             });
 
@@ -234,6 +246,32 @@ async fn put_config(
     s.control.set_config(Arc::new(body));
     info!("config updated; subsystems will restart");
     (StatusCode::OK, Json(serde_json::json!({ "ok": true })))
+}
+
+async fn dispatch_action(
+    State(s): State<ConsoleState>,
+    AxPath((subsystem, action)): AxPath<(String, String)>,
+    body: Option<Json<serde_json::Value>>,
+) -> (StatusCode, Json<serde_json::Value>) {
+    let params = body.map(|j| j.0).unwrap_or(serde_json::Value::Null);
+    let envelope = ActionEnvelope {
+        name: action.clone(),
+        params,
+    };
+    match s.control.dispatch(&subsystem, envelope).await {
+        Ok(()) => (
+            StatusCode::ACCEPTED,
+            Json(serde_json::json!({ "ok": true, "subsystem": subsystem, "action": action })),
+        ),
+        Err(DispatchError::UnknownSubsystem) => (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({ "error": format!("unknown subsystem '{subsystem}'") })),
+        ),
+        Err(DispatchError::Closed) => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(serde_json::json!({ "error": format!("subsystem '{subsystem}' is not running") })),
+        ),
+    }
 }
 
 #[derive(Deserialize)]
