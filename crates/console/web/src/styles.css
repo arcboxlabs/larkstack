@@ -9,10 +9,54 @@ body {
   margin: 0;
 }
 
-main {
+.app {
   max-width: 960px;
-  margin: 2rem auto;
-  padding: 0 1.5rem;
+  margin: 0 auto;
+  padding: 1.5rem;
+}
+
+.app-header {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  padding-bottom: 1rem;
+  margin-bottom: 1.5rem;
+  border-bottom: 1px solid color-mix(in srgb, canvastext 12%, transparent);
+}
+
+.app-title {
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.tabs {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.tab {
+  font: inherit;
+  font-size: 0.9rem;
+  padding: 0.35rem 0.85rem;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  opacity: 0.7;
+}
+
+.tab:hover {
+  opacity: 1;
+}
+
+.tab.active {
+  background: color-mix(in srgb, canvastext 10%, transparent);
+  opacity: 1;
+}
+
+main {
+  display: block;
 }
 
 h1 {
@@ -25,11 +69,11 @@ h2 {
   text-transform: uppercase;
   letter-spacing: 0.05em;
   opacity: 0.8;
-  margin: 2rem 0 0.75rem;
+  margin: 0 0 0.75rem;
 }
 
 section + section {
-  margin-top: 1rem;
+  margin-top: 2rem;
 }
 
 table {
@@ -61,13 +105,55 @@ th {
   color: #ef4444;
 }
 
-.dot {
-  display: inline-block;
-  width: 0.6rem;
-  height: 0.6rem;
-  border-radius: 50%;
-  margin-right: 0.5rem;
-  vertical-align: middle;
+.status-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: 0.75rem;
+}
+
+.status-card {
+  border: 1px solid color-mix(in srgb, canvastext 15%, transparent);
+  border-radius: 6px;
+  padding: 0.75rem 1rem;
+  background: color-mix(in srgb, canvastext 3%, transparent);
+}
+
+.status-card.errored {
+  border-color: color-mix(in srgb, #ef4444 50%, transparent);
+}
+
+.status-card header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.status-name {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 0.9rem;
+}
+
+.status-pill {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border: 1px solid currentColor;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+}
+
+.status-msg {
+  margin: 0.3rem 0;
+  font-size: 0.85rem;
+  color: #ef4444;
+  word-break: break-word;
+}
+
+.status-card footer {
+  margin-top: 0.5rem;
+  font-size: 0.78rem;
 }
 
 .events-header {
@@ -79,7 +165,7 @@ th {
 }
 
 .events-header h2 {
-  margin: 2rem 0 0;
+  margin: 0;
 }
 
 .filters {
@@ -190,32 +276,86 @@ th {
   cursor: not-allowed;
 }
 
+.help-text {
+  font-size: 0.85rem;
+  margin: 0.25rem 0 1rem;
+}
+
 .actions-group {
-  margin-bottom: 0.75rem;
+  margin-bottom: 1.5rem;
 }
 
 .actions-subsystem {
-  font-size: 0.85rem;
-  opacity: 0.7;
-  margin-bottom: 0.4rem;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 0.9rem;
+  opacity: 0.75;
+  margin-bottom: 0.5rem;
 }
 
-.actions-row {
-  display: flex;
+.action-cards {
+  display: grid;
   gap: 0.5rem;
-  flex-wrap: wrap;
+}
+
+.action-card {
+  border: 1px solid color-mix(in srgb, canvastext 15%, transparent);
+  border-radius: 6px;
+  padding: 0.75rem 1rem;
+  background: color-mix(in srgb, canvastext 3%, transparent);
+}
+
+.action-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.action-name {
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.action-fields {
+  display: grid;
+  gap: 0.4rem;
+  margin-top: 0.6rem;
+  padding-top: 0.6rem;
+  border-top: 1px dashed color-mix(in srgb, canvastext 12%, transparent);
+}
+
+.action-fields label {
+  display: grid;
+  grid-template-columns: 14rem 1fr;
+  gap: 0.5rem;
+  align-items: center;
+  font-size: 0.8rem;
+}
+
+.action-fields .req {
+  color: #ef4444;
+}
+
+.action-fields input {
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 0.3rem 0.5rem;
+  border: 1px solid color-mix(in srgb, canvastext 20%, transparent);
+  border-radius: 4px;
+  background: canvas;
+  color: canvastext;
 }
 
 .action-btn {
   font: inherit;
   font-size: 0.85rem;
-  padding: 0.3rem 0.7rem;
+  padding: 0.3rem 0.85rem;
   border: 1px solid color-mix(in srgb, canvastext 30%, transparent);
   border-radius: 4px;
   background: transparent;
   color: inherit;
   cursor: pointer;
-  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  min-width: 4rem;
 }
 
 .action-btn:hover:not(:disabled) {
@@ -235,6 +375,20 @@ th {
 .action-btn.error {
   color: #ef4444;
   border-color: #ef4444;
+}
+
+.action-result {
+  margin-top: 0.5rem;
+  font-size: 0.8rem;
+}
+
+.action-result.ok {
+  color: #22c55e;
+}
+
+.action-result.error {
+  color: #ef4444;
+  word-break: break-word;
 }
 
 .login {
@@ -286,12 +440,11 @@ th {
 button.signout {
   font: inherit;
   font-size: 0.75rem;
-  margin-left: 1rem;
-  padding: 0.2rem 0.5rem;
+  margin-left: auto;
+  padding: 0.25rem 0.6rem;
   border: 1px solid color-mix(in srgb, canvastext 30%, transparent);
   border-radius: 4px;
   background: transparent;
   color: inherit;
   cursor: pointer;
-  vertical-align: middle;
 }

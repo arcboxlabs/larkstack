@@ -3,91 +3,21 @@ import { Actions } from "./Actions";
 import { Config } from "./Config";
 import { Events } from "./Events";
 import { Login } from "./Login";
-import { api, getToken, setToken, subscribe } from "./auth";
+import { Status } from "./Status";
+import { getToken, setToken, subscribe } from "./auth";
 
-type State = "starting" | "running" | "errored" | "stopped";
+type Tab = "status" | "actions" | "config" | "events";
 
-interface Status {
-  state: State;
-  message: string | null;
-  updated_at: number;
-}
+const TABS: Array<{ id: Tab; label: string }> = [
+  { id: "status", label: "Status" },
+  { id: "actions", label: "Actions" },
+  { id: "config", label: "Config" },
+  { id: "events", label: "Events" },
+];
 
-interface StatusResponse {
-  subsystems: Record<string, Status>;
-}
-
-const STATE_COLORS: Record<State, string> = {
-  starting: "#888",
-  running: "#22c55e",
-  errored: "#ef4444",
-  stopped: "#6b7280",
-};
-
-function StatusTable() {
-  const [data, setData] = useState<StatusResponse | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const fetchStatus = async () => {
-      try {
-        const r = await api("/api/status");
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        setData(await r.json());
-        setError(null);
-      } catch (e) {
-        setError(String(e));
-      }
-    };
-    fetchStatus();
-    const id = setInterval(fetchStatus, 3000);
-    return () => clearInterval(id);
-  }, []);
-
-  return (
-    <section>
-      <h2>Subsystems</h2>
-      {error && <p className="error">Failed to load: {error}</p>}
-      {!data && !error && <p>Loading…</p>}
-      {data && (
-        <table>
-          <thead>
-            <tr>
-              <th>Subsystem</th>
-              <th>State</th>
-              <th>Message</th>
-              <th>Updated</th>
-            </tr>
-          </thead>
-          <tbody>
-            {Object.entries(data.subsystems).length === 0 && (
-              <tr>
-                <td colSpan={4} className="muted">
-                  no subsystems reporting yet
-                </td>
-              </tr>
-            )}
-            {Object.entries(data.subsystems).map(([name, s]) => (
-              <tr key={name}>
-                <td>{name}</td>
-                <td>
-                  <span
-                    className="dot"
-                    style={{ background: STATE_COLORS[s.state] }}
-                  />
-                  {s.state}
-                </td>
-                <td className="muted">{s.message ?? "—"}</td>
-                <td className="muted">
-                  {new Date(s.updated_at).toLocaleTimeString()}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-    </section>
-  );
+function parseHash(): Tab {
+  const h = window.location.hash.slice(1);
+  return (TABS.find((t) => t.id === h)?.id ?? "status") as Tab;
 }
 
 export function App() {
@@ -95,10 +25,16 @@ export function App() {
   const [authMode, setAuthMode] = useState<"unknown" | "open" | "secured">(
     "unknown",
   );
+  const [tab, setTab] = useState<Tab>(parseHash());
 
   useEffect(() => subscribe(() => setTok(getToken())), []);
 
-  // Probe whether the server requires auth on first mount.
+  useEffect(() => {
+    const onHash = () => setTab(parseHash());
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
+
   useEffect(() => {
     fetch("/api/status")
       .then((r) => {
@@ -109,15 +45,37 @@ export function App() {
       .catch(() => setAuthMode("secured"));
   }, []);
 
-  if (authMode === "unknown") return <main><p>Loading…</p></main>;
+  const navigate = (id: Tab) => {
+    window.location.hash = id;
+    setTab(id);
+  };
+
+  if (authMode === "unknown") {
+    return (
+      <main>
+        <p>Loading…</p>
+      </main>
+    );
+  }
   if (authMode === "secured" && !token) {
     return <Login onAuthed={() => setTok(getToken())} />;
   }
 
   return (
-    <main>
-      <h1>
-        larkstack console
+    <div className="app">
+      <header className="app-header">
+        <div className="app-title">larkstack console</div>
+        <nav className="tabs">
+          {TABS.map((t) => (
+            <button
+              key={t.id}
+              className={`tab ${tab === t.id ? "active" : ""}`}
+              onClick={() => navigate(t.id)}
+            >
+              {t.label}
+            </button>
+          ))}
+        </nav>
         {token && (
           <button
             className="signout"
@@ -127,11 +85,13 @@ export function App() {
             sign out
           </button>
         )}
-      </h1>
-      <StatusTable />
-      <Actions />
-      <Config />
-      <Events />
-    </main>
+      </header>
+      <main>
+        {tab === "status" && <Status />}
+        {tab === "actions" && <Actions />}
+        {tab === "config" && <Config />}
+        {tab === "events" && <Events />}
+      </main>
+    </div>
   );
 }
