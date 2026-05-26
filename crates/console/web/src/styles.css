@@ -236,3 +236,62 @@ th {
   color: #ef4444;
   border-color: #ef4444;
 }
+
+.login {
+  max-width: 22rem;
+  margin: 6rem auto;
+  text-align: center;
+}
+
+.login form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-top: 2rem;
+}
+
+.login label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  text-align: left;
+  font-size: 0.85rem;
+  opacity: 0.8;
+}
+
+.login input {
+  font: inherit;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid color-mix(in srgb, canvastext 30%, transparent);
+  border-radius: 4px;
+  background: canvas;
+  color: canvastext;
+}
+
+.login button {
+  font: inherit;
+  padding: 0.55rem;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.login button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+button.signout {
+  font: inherit;
+  font-size: 0.75rem;
+  margin-left: 1rem;
+  padding: 0.2rem 0.5rem;
+  border: 1px solid color-mix(in srgb, canvastext 30%, transparent);
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  vertical-align: middle;
+}

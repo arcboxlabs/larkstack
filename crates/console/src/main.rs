@@ -7,9 +7,13 @@ use anyhow::Context;
 use axum::extract::Path as AxPath;
 use axum::{
     Json, Router,
-    extract::{Query, State},
+    extract::{Query, Request, State},
     http::{HeaderMap, StatusCode, header},
-    response::sse::{Event as SseEvent, KeepAlive, Sse},
+    middleware::{self, Next},
+    response::{
+        Response,
+        sse::{Event as SseEvent, KeepAlive, Sse},
+    },
     routing::get,
 };
 use control::{
@@ -20,6 +24,7 @@ use linear_bridge::config::AppState as LinearBridgeState;
 use meeting_digest::AppConfig as MeetingDigestCfg;
 use serde::Deserialize;
 use standup_bot::AppConfig as StandupCfg;
+use subtle::ConstantTimeEq;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::{BroadcastStream, errors::BroadcastStreamRecvError};
 use tracing::{error, info, warn};
@@ -118,15 +123,31 @@ async fn main() -> anyhow::Result<()> {
         config_path: config_path.clone(),
     };
 
-    let app = Router::new()
-        .route("/api/status", get(status))
-        .route("/api/events", get(events))
-        .route("/api/config", get(get_config).put(put_config))
+    let token = std::env::var("CONSOLE_TOKEN").ok().map(Arc::new);
+    if token.is_none() {
+        warn!(
+            "CONSOLE_TOKEN is unset — /api/* is OPEN. Set CONSOLE_TOKEN to a \
+             random secret before exposing this console outside localhost."
+        );
+    }
+    let auth_layer = middleware::from_fn(move |req, next| {
+        let token = token.clone();
+        async move { require_auth(token, req, next).await }
+    });
+
+    let api = Router::new()
+        .route("/status", get(status))
+        .route("/events", get(events))
+        .route("/config", get(get_config).put(put_config))
         .route(
-            "/api/actions/{subsystem}/{action}",
+            "/actions/{subsystem}/{action}",
             axum::routing::post(dispatch_action),
         )
-        .route("/api/health", get(|| async { "ok" }))
+        .route_layer(auth_layer)
+        .route("/health", get(|| async { "ok" }));
+
+    let app = Router::new()
+        .nest("/api", api)
         .fallback(assets::serve)
         .with_state(state);
 
@@ -139,8 +160,33 @@ async fn main() -> anyhow::Result<()> {
         .await
         .with_context(|| format!("bind {addr}"))?;
     info!("console listening on http://{addr}");
-    axum::serve(listener, app).await?;
+    axum::serve(listener, app)
+        .with_graceful_shutdown(shutdown_signal())
+        .await?;
+    info!("console shut down cleanly");
     Ok(())
+}
+
+async fn shutdown_signal() {
+    let ctrl_c = async {
+        let _ = tokio::signal::ctrl_c().await;
+    };
+
+    #[cfg(unix)]
+    let terminate = async {
+        if let Ok(mut sig) =
+            tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+        {
+            sig.recv().await;
+        }
+    };
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+
+    tokio::select! {
+        _ = ctrl_c => info!("ctrl-c received; shutting down"),
+        _ = terminate => info!("SIGTERM received; shutting down"),
+    }
 }
 
 fn load_or_create_config(path: &Path) -> anyhow::Result<String> {
@@ -311,6 +357,64 @@ fn spawn_standup_bot(
             _ = standup_bot::run_with_bot(cfg, bot, handle.clone()) => {}
         }
     })
+}
+
+async fn require_auth(
+    expected: Option<Arc<String>>,
+    req: Request,
+    next: Next,
+) -> Result<Response, StatusCode> {
+    let Some(expected) = expected else {
+        return Ok(next.run(req).await);
+    };
+
+    let header_token = req
+        .headers()
+        .get(header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.strip_prefix("Bearer "));
+
+    let query_token = req
+        .uri()
+        .query()
+        .and_then(|q| {
+            q.split('&').find_map(|p| {
+                let (k, v) = p.split_once('=')?;
+                (k == "token").then_some(v)
+            })
+        })
+        .map(urldecode);
+
+    let provided = header_token.map(str::to_string).or(query_token);
+
+    match provided {
+        Some(p) if p.as_bytes().ct_eq(expected.as_bytes()).into() => Ok(next.run(req).await),
+        _ => Err(StatusCode::UNAUTHORIZED),
+    }
+}
+
+fn urldecode(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut bytes = s.bytes();
+    while let Some(b) = bytes.next() {
+        match b {
+            b'%' => {
+                let h = bytes.next();
+                let l = bytes.next();
+                if let (Some(h), Some(l)) = (h, l)
+                    && let (Some(hi), Some(lo)) =
+                        ((h as char).to_digit(16), (l as char).to_digit(16))
+                {
+                    out.push(((hi << 4 | lo) as u8) as char);
+                } else {
+                    out.push('%');
+                }
+            }
+            b'+' => out.push(' '),
+            other => out.push(other as char),
+        }
+    }
+    out
 }
 
 async fn status(State(s): State<ConsoleState>) -> (StatusCode, Json<serde_json::Value>) {

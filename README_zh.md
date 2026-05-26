@@ -4,60 +4,69 @@
 
 <br>
 
-<h1 align="center">LarkStack-Linear</h1>
+<h1 align="center">larkstack</h1>
 
 <p align="center">
-  Rust 中间件，把 <a href="https://linear.app/">Linear</a> 事件同步到<a href="https://larksuite.com/">飞书</a>通知。
-  <br>
-  支持原生服务器 (Tokio) 和 Cloudflare Worker (WASM) 两种部署方式。
+  一个可执行文件管理多个 Lark/Feishu 工具，自带 React 管理 UI（状态、配置、动作触发）。
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Rust-Edition_2024-orange.svg" alt="Rust Version">
+  <img src="https://img.shields.io/badge/Rust-Edition_2024-orange.svg" alt="Rust">
   <img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License">
 </p>
 
 <hr>
 
-## 功能
+## 仓库结构
 
-- **群聊通知** — Issue 创建或更新时发一张按优先级配色的卡片到飞书群。连续更新会防抖合并，不刷屏。
-- **指派私聊** — Issue 分配后通过邮箱匹配，自动给指派人发飞书私聊。
-- **链接预览** — 在飞书粘贴 `linear.app` 链接，自动展开成摘要卡片（通过 Linear GraphQL API）。
-- **签名校验** — Linear 用 HMAC-SHA256 验签，飞书用 token 校验。
+| Crate | 作用 |
+| :--- | :--- |
+| `crates/console` | umbrella binary `larkstack-console`——tokio 监管 + axum API + 内嵌 React UI |
+| `crates/control` | 共享类型（`ControlPlane`、`EventStore`、动作分发） |
+| `crates/linear-bridge` | Linear webhook → 飞书通知。仍可独立部署（含 Cloudflare Workers） |
+| `crates/meeting-digest` | 自动转写飞书 VC 录制并发送摘要卡片 |
+| `crates/standup-bot` | 每日站会提醒 + 群内命令 |
 
-## 路由
+## 控制台特性
 
-| Method | Path | 用途 |
-| :--- | :--- | :--- |
-| `POST` | `/webhook` | 接收 Linear Webhook |
-| `POST` | `/lark/event` | 飞书事件回调 (Challenge 验证 + 链接预览) |
-| `GET`  | `/health` | 健康检查 |
+- **状态面板**——每个子系统的运行状态 + 最近错误
+- **实时事件流**——所有子系统的 `tracing` 事件，SSE 支持 `?since=` / `Last-Event-ID` 回放，持久化到 SQLite（滚动 1 万条）
+- **配置编辑**——UI 内 TOML 编辑器，保存即热重启对应子系统
+- **动作触发**——每个子系统的一次性命令（`linear-bridge: ping/test-lark`、`standup-bot: announce/ensure/remind/urgent/check`、`meeting-digest: process-meeting`）
+- **认证**——`CONSOLE_TOKEN` 环境变量保护 `/api/*`
 
 ## 快速开始
 
 ```bash
-cd crates/linear-bridge
-export LINEAR_WEBHOOK_SECRET=your_secret
-export LARK_WEBHOOK_URL=https://open.larksuite.com/open-apis/bot/v2/hook/xxx
-cargo run
+# 1. 构建
+cd crates/console/web && npm ci && npm run build && cd ../../..
+cargo build -p console --release
+
+# 2. 运行
+CONSOLE_TOKEN=$(openssl rand -hex 32) \
+LINEAR_WEBHOOK_SECRET=your_secret \
+LARK_WEBHOOK_URL=https://open.larksuite.com/open-apis/bot/v2/hook/xxx \
+./target/release/larkstack-console
+# UI 在 http://localhost:8080，linear-bridge webhook 在 http://localhost:3000
 ```
 
-完整环境变量说明见 [Configuration](./docs/getting-started/configuration.md)。
+或者用 Docker：
 
-## 部署
+```bash
+docker compose up -d
+```
 
-| 平台 | 文档 |
+完整环境变量见 [docs/deploy/console.md](./docs/deploy/console.md)。
+
+## 独立部署单个子系统
+
+每个 crate 仍保留独立 `[[bin]]`：
+
+| 目标 | 文档 |
 | :--- | :--- |
-| Railway / Docker | [docs/deploy/railway.md](./docs/deploy/railway.md) |
-| Cloudflare Workers | [docs/deploy/cloudflare-workers.md](./docs/deploy/cloudflare-workers.md) |
-
-## 本地开发
-
-1. 建一个飞书测试群，加自定义 Bot。在 Linear 新建 Webhook。
-2. `ngrok http 3000` 拿到公网地址。
-3. `cd crates/linear-bridge && cargo run`，把 ngrok 地址填进 Linear webhook。
+| linear-bridge → Railway/Docker | [docs/deploy/railway.md](./docs/deploy/railway.md) |
+| linear-bridge → Cloudflare Workers | [docs/deploy/cloudflare-workers.md](./docs/deploy/cloudflare-workers.md) |
 
 ## 许可证
 
-[MIT](./LICENSE)
+[MIT](./LICENSE-MIT) 或 [Apache-2.0](./LICENSE-APACHE)，二选一。

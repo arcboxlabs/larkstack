@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { api } from "./auth";
 
 interface Action {
   name: string;
@@ -35,7 +36,7 @@ export function Actions() {
     const key = `${subsystem}/${action}`;
     setResults((r) => ({ ...r, [key]: { kind: "running" } }));
     try {
-      const r = await fetch(`/api/actions/${subsystem}/${action}`, {
+      const r = await api(`/api/actions/${subsystem}/${action}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: "null",

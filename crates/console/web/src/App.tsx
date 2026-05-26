@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { Actions } from "./Actions";
 import { Config } from "./Config";
 import { Events } from "./Events";
+import { Login } from "./Login";
+import { api, getToken, setToken, subscribe } from "./auth";
 
 type State = "starting" | "running" | "errored" | "stopped";
 
@@ -29,7 +31,7 @@ function StatusTable() {
   useEffect(() => {
     const fetchStatus = async () => {
       try {
-        const r = await fetch("/api/status");
+        const r = await api("/api/status");
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         setData(await r.json());
         setError(null);
@@ -89,9 +91,43 @@ function StatusTable() {
 }
 
 export function App() {
+  const [token, setTok] = useState<string | null>(getToken());
+  const [authMode, setAuthMode] = useState<"unknown" | "open" | "secured">(
+    "unknown",
+  );
+
+  useEffect(() => subscribe(() => setTok(getToken())), []);
+
+  // Probe whether the server requires auth on first mount.
+  useEffect(() => {
+    fetch("/api/status")
+      .then((r) => {
+        if (r.status === 401) setAuthMode("secured");
+        else if (r.ok) setAuthMode("open");
+        else setAuthMode("secured");
+      })
+      .catch(() => setAuthMode("secured"));
+  }, []);
+
+  if (authMode === "unknown") return <main><p>Loading…</p></main>;
+  if (authMode === "secured" && !token) {
+    return <Login onAuthed={() => setTok(getToken())} />;
+  }
+
   return (
     <main>
-      <h1>larkstack console</h1>
+      <h1>
+        larkstack console
+        {token && (
+          <button
+            className="signout"
+            onClick={() => setToken(null)}
+            title="Sign out"
+          >
+            sign out
+          </button>
+        )}
+      </h1>
       <StatusTable />
       <Actions />
       <Config />

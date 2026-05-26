@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { sseUrl } from "./auth";
 
 export type Level = "trace" | "debug" | "info" | "warn" | "error";
 
@@ -30,7 +31,7 @@ export function useEvents(): {
 
     const connect = () => {
       if (cancelled) return;
-      src = new EventSource("/api/events");
+      src = new EventSource(sseUrl("/api/events"));
       src.onopen = () => setConnected(true);
       src.onerror = () => {
         setConnected(false);

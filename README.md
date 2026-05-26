@@ -4,60 +4,71 @@
 
 <br>
 
-<h1 align="center">LarkStack-Linear</h1>
+<h1 align="center">larkstack</h1>
 
 <p align="center">
-  Rust middleware that syncs <a href="https://linear.app/">Linear</a> events to <a href="https://larksuite.com/">Lark / Feishu</a> notifications.
+  Single-binary admin console + Lark/Feishu utility crates.
   <br>
-  Runs as a native server (Tokio) or a Cloudflare Worker (WASM).
+  One process supervises everything, with a React Web UI for status, config, and one-shot actions.
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Rust-Edition_2024-orange.svg" alt="Rust Version">
+  <img src="https://img.shields.io/badge/Rust-Edition_2024-orange.svg" alt="Rust">
   <img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License">
 </p>
 
 <hr>
 
-## Features
+## What's in the box
 
-- **Group notifications** — Issue create / update posts an interactive card to a Lark group, color-coded by priority. Rapid-fire updates are debounced into a single message.
-- **DM on assign** — Assigning an issue sends a private message to the assignee's Lark account, matched by email.
-- **Link previews** — Paste a `linear.app` URL in Lark and it unfurls into a summary card via Linear's GraphQL API.
-- **Webhook signature verification** — HMAC-SHA256 for Linear, token verification for Lark.
+| Crate | Purpose |
+| :--- | :--- |
+| `crates/console` | Umbrella binary `larkstack-console` — tokio supervisor + axum API + embedded React UI |
+| `crates/control` | Shared types (`ControlPlane`, `EventStore`, action dispatch) |
+| `crates/linear-bridge` | Linear webhook → Lark notifications. Standalone bin still works (incl. Cloudflare Workers) |
+| `crates/meeting-digest` | Auto-transcribe Lark VC recordings and post digest cards |
+| `crates/standup-bot` | Daily standup reminders + on-demand chat commands |
 
-## Endpoints
+## Console features
 
-| Method | Path | Purpose |
-| :--- | :--- | :--- |
-| `POST` | `/webhook` | Linear webhook receiver |
-| `POST` | `/lark/event` | Lark event callback (challenge + link preview) |
-| `GET`  | `/health` | Health check |
+- **Dashboard** — per-subsystem state + last-error.
+- **Live event stream** — every `tracing` event from every subsystem, SSE with `?since=` / `Last-Event-ID` backfill, persisted to SQLite (rolling 10k).
+- **Config editor** — TOML editor in the UI; saving triggers a hot restart of the affected subsystem.
+- **Actions** — one-shot triggers per subsystem (`linear-bridge: ping/test-lark`, `standup-bot: announce/ensure/remind/urgent/check`, `meeting-digest: process-meeting`).
+- **Auth** — `CONSOLE_TOKEN` env var protects `/api/*`.
 
-## Quick Start
+## Quick start
 
 ```bash
-cd crates/linear-bridge
-export LINEAR_WEBHOOK_SECRET=your_secret
-export LARK_WEBHOOK_URL=https://open.larksuite.com/open-apis/bot/v2/hook/xxx
-cargo run
+# 1. Build
+cd crates/console/web && npm ci && npm run build && cd ../../..
+cargo build -p console --release
+
+# 2. Run
+CONSOLE_TOKEN=$(openssl rand -hex 32) \
+LINEAR_WEBHOOK_SECRET=your_secret \
+LARK_WEBHOOK_URL=https://open.larksuite.com/open-apis/bot/v2/hook/xxx \
+./target/release/larkstack-console
+# UI on http://localhost:8080, linear-bridge webhook on http://localhost:3000
 ```
 
-See [Configuration](./docs/getting-started/configuration.md) for the full environment variable reference.
+Or with Docker:
 
-## Deployment
+```bash
+docker compose up -d
+```
 
-| Platform | Guide |
+See [docs/deploy/console.md](./docs/deploy/console.md) for the full env-var reference.
+
+## Standalone subsystems
+
+If you only need one piece, each crate keeps its `[[bin]]` and can be deployed alone:
+
+| Target | Guide |
 | :--- | :--- |
-| Railway / Docker | [docs/deploy/railway.md](./docs/deploy/railway.md) |
-| Cloudflare Workers | [docs/deploy/cloudflare-workers.md](./docs/deploy/cloudflare-workers.md) |
-
-## Local Development
-
-1. Create a Lark test group with a custom bot. Add a webhook in Linear.
-2. `ngrok http 3000` to get a public URL.
-3. `cd crates/linear-bridge && cargo run`, point the Linear webhook to `https://<NGROK_URL>/webhook`.
+| linear-bridge → Railway/Docker | [docs/deploy/railway.md](./docs/deploy/railway.md) |
+| linear-bridge → Cloudflare Workers | [docs/deploy/cloudflare-workers.md](./docs/deploy/cloudflare-workers.md) |
 
 ## License
 
-[MIT](./LICENSE)
+[MIT](./LICENSE-MIT) or [Apache-2.0](./LICENSE-APACHE), at your option.

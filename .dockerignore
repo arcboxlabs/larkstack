@@ -1,0 +1,14 @@
+target/
+.git/
+.github/
+.devenv/
+.devenv.flake.nix
+.direnv/
+.envrc.local
+data/
+site/
+.zensical-cache/
+crates/console/web/node_modules/
+crates/console/web/dist/
+crates/console/web/*.tsbuildinfo
+*.log

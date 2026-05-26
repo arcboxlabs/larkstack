@@ -1,0 +1,24 @@
+services:
+  larkstack:
+    build: .
+    image: larkstack-console:latest
+    container_name: larkstack-console
+    restart: unless-stopped
+    ports:
+      - "8080:8080" # admin UI + API
+      - "3000:3000" # linear-bridge webhook receiver (optional, omit if you don't expose it)
+    environment:
+      # Required: random secret protecting /api/*. Leave unset for local-only dev.
+      # CONSOLE_TOKEN: replace-me
+      # RUST_LOG: info
+
+      # Subsystem secrets (read by each subsystem's config loader). Anything
+      # left unset is configurable from the UI's TOML editor instead.
+      # LINEAR_WEBHOOK_SECRET: ...
+      # LARK_APP_ID: ...
+      # LARK_APP_SECRET: ...
+    volumes:
+      - larkstack-data:/data
+
+volumes:
+  larkstack-data:

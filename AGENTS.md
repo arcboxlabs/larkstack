@@ -81,9 +81,14 @@ Routes:
 
 Env:
 - `CONSOLE_PORT` (default `8080`) — console listener
-- `CONSOLE_DATA_DIR` (default `./data`) — directory for `events.db` and future config artifacts
+- `CONSOLE_DATA_DIR` (default `./data`) — directory for `events.db` and `config.toml`
+- `CONSOLE_TOKEN` (default unset) — required value of `Authorization: Bearer <token>` for `/api/*` (except `/api/health`). SSE clients pass it as `?token=…` instead. Unset = warn + no auth.
 
 Subsystem env vars (`LINEAR_*`, `LARK_*`, etc.) are read by each subsystem's own config loader, same as in standalone mode.
+
+Shutdown: SIGINT / SIGTERM triggers `axum::serve(...).with_graceful_shutdown(...)`. In-flight HTTP requests drain; subsystem tokio tasks get aborted.
+
+Container: workspace-root `Dockerfile` (multi-stage: node → rust → debian:slim). `.dockerignore` excludes `target/`, `node_modules/`, `data/`. `docker-compose.yml` mounts a named volume at `/data`.
 
 Event log retention: the SQLite store keeps the most recent 10,000 events (rolling). On startup the console reads `MAX(id)` and advances the in-memory id counter so reboots don't collide with persisted ids.
 

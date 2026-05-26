@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { api } from "./auth";
 
 type SaveState =
   | { kind: "idle" }
@@ -13,7 +14,7 @@ export function Config() {
   const [save, setSave] = useState<SaveState>({ kind: "idle" });
 
   useEffect(() => {
-    fetch("/api/config")
+    api("/api/config")
       .then((r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return r.text();
@@ -31,7 +32,7 @@ export function Config() {
   const onSave = async () => {
     setSave({ kind: "saving" });
     try {
-      const r = await fetch("/api/config", {
+      const r = await api("/api/config", {
         method: "PUT",
         headers: { "Content-Type": "application/toml" },
         body: draft,
