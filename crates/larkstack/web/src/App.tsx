@@ -2,15 +2,17 @@ import { useEffect, useState } from "react";
 import { Actions } from "./Actions";
 import { Config } from "./Config";
 import { Events } from "./Events";
+import { LarkApps } from "./LarkApps";
 import { Login } from "./Login";
 import { Status } from "./Status";
 import { getToken, setToken, subscribe } from "./auth";
 
-type Tab = "status" | "actions" | "config" | "events";
+type Tab = "status" | "actions" | "lark-apps" | "config" | "events";
 
 const TABS: Array<{ id: Tab; label: string }> = [
   { id: "status", label: "Status" },
   { id: "actions", label: "Actions" },
+  { id: "lark-apps", label: "Lark Apps" },
   { id: "config", label: "Config" },
   { id: "events", label: "Events" },
 ];
@@ -89,6 +91,7 @@ export function App() {
       <main>
         {tab === "status" && <Status />}
         {tab === "actions" && <Actions />}
+        {tab === "lark-apps" && <LarkApps />}
         {tab === "config" && <Config />}
         {tab === "events" && <Events />}
       </main>
