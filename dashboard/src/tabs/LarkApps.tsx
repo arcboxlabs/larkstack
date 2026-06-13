@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api } from "./auth";
+import { api } from "../lib/auth";
 
 interface LarkAppRow {
   name: string;

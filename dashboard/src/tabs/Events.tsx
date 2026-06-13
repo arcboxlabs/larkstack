@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useEvents, type Level } from "./useEvents";
+import { useEvents, type Level } from "../lib/useEvents";
 
 const LEVEL_ORDER: Record<Level, number> = {
   trace: 0,

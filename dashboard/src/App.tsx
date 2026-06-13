@@ -1,15 +1,17 @@
 import { useEffect, useState } from "react";
-import { Actions } from "./Actions";
-import { Config } from "./Config";
-import { Events } from "./Events";
-import { LarkApps } from "./LarkApps";
+import { Tabs } from "@base-ui/react/tabs";
+import { TabBar, type TabDef } from "./components/TabBar";
+import { Actions } from "./tabs/Actions";
+import { Config } from "./tabs/Config";
+import { Events } from "./tabs/Events";
+import { LarkApps } from "./tabs/LarkApps";
+import { Status } from "./tabs/Status";
 import { Login } from "./Login";
-import { Status } from "./Status";
-import { getToken, setToken, subscribe } from "./auth";
+import { getToken, setToken, subscribe } from "./lib/auth";
 
 type Tab = "status" | "actions" | "lark-apps" | "config" | "events";
 
-const TABS: Array<{ id: Tab; label: string }> = [
+const TABS: ReadonlyArray<TabDef & { id: Tab }> = [
   { id: "status", label: "Status" },
   { id: "actions", label: "Actions" },
   { id: "lark-apps", label: "Lark Apps" },
@@ -48,6 +50,7 @@ export function App() {
   }, []);
 
   const navigate = (id: Tab) => {
+    if (id === tab) return;
     window.location.hash = id;
     setTab(id);
   };
@@ -65,36 +68,38 @@ export function App() {
 
   return (
     <div className="app">
-      <header className="app-header">
-        <div className="app-title">larkstack console</div>
-        <nav className="tabs">
-          {TABS.map((t) => (
+      <Tabs.Root value={tab} onValueChange={(value) => navigate(value as Tab)}>
+        <header className="app-header">
+          <div className="app-title">larkstack console</div>
+          <TabBar tabs={TABS} />
+          {token && (
             <button
-              key={t.id}
-              className={`tab ${tab === t.id ? "active" : ""}`}
-              onClick={() => navigate(t.id)}
+              className="signout"
+              onClick={() => setToken(null)}
+              title="Sign out"
             >
-              {t.label}
+              sign out
             </button>
-          ))}
-        </nav>
-        {token && (
-          <button
-            className="signout"
-            onClick={() => setToken(null)}
-            title="Sign out"
-          >
-            sign out
-          </button>
-        )}
-      </header>
-      <main>
-        {tab === "status" && <Status />}
-        {tab === "actions" && <Actions />}
-        {tab === "lark-apps" && <LarkApps />}
-        {tab === "config" && <Config />}
-        {tab === "events" && <Events />}
-      </main>
+          )}
+        </header>
+        <main>
+          <Tabs.Panel value="status">
+            <Status />
+          </Tabs.Panel>
+          <Tabs.Panel value="actions">
+            <Actions />
+          </Tabs.Panel>
+          <Tabs.Panel value="lark-apps">
+            <LarkApps />
+          </Tabs.Panel>
+          <Tabs.Panel value="config">
+            <Config />
+          </Tabs.Panel>
+          <Tabs.Panel value="events">
+            <Events />
+          </Tabs.Panel>
+        </main>
+      </Tabs.Root>
     </div>
   );
 }

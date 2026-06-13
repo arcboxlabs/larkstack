@@ -7,12 +7,16 @@
 
 body {
   margin: 0;
+  /* Base UI: positioned ancestor for portaled popups (Dialog/Popover). */
+  position: relative;
 }
 
 .app {
   max-width: 960px;
   margin: 0 auto;
   padding: 1.5rem;
+  /* Base UI: own stacking context so popups layer above the app. */
+  isolation: isolate;
 }
 
 .app-header {
@@ -50,7 +54,7 @@ body {
   opacity: 1;
 }
 
-.tab.active {
+.tab[aria-selected="true"] {
   background: color-mix(in srgb, canvastext 10%, transparent);
   opacity: 1;
 }

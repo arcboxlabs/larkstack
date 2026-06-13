@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { setToken } from "./auth";
+import { setToken } from "./lib/auth";
 
 export function Login({ onAuthed }: { onAuthed: () => void }) {
   const [draft, setDraft] = useState("");
