@@ -2,8 +2,8 @@ use std::process::ExitCode;
 use std::sync::Arc;
 
 use clap::{Parser, Subcommand};
-use larkstack_core::ControlPlane;
 use larkoapi::LarkBotClient;
+use larkstack_core::ControlPlane;
 use tracing::error;
 
 use meeting_digest::AppConfig;

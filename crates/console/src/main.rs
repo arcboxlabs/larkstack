@@ -16,10 +16,10 @@ use axum::{
     },
     routing::get,
 };
+use futures_util::stream::{Stream, StreamExt};
 use larkstack_core::{
     ActionEnvelope, ControlHandle, ControlLayer, ControlPlane, DispatchError, EventStore,
 };
-use futures_util::stream::{Stream, StreamExt};
 use linear_bridge::config::AppState as LinearBridgeState;
 use meeting_digest::AppConfig as MeetingDigestCfg;
 use serde::Deserialize;
