@@ -17,9 +17,11 @@ use std::time::SystemTime;
 use serde::{Deserialize, Serialize};
 use tokio::sync::{RwLock, broadcast, mpsc, watch};
 
+pub mod app;
 mod store;
 mod tracing_layer;
 
+pub use app::{ActionSpec, App, Instance, Kind, Manifest};
 pub use store::EventStore;
 pub use tracing_layer::ControlLayer;
 

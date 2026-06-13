@@ -15,3 +15,5 @@ tracing-subscriber = { workspace = true }
 rusqlite = { version = "0.38", features = ["bundled"] }
 anyhow = { workspace = true }
 thiserror = { workspace = true }
+async-trait = { workspace = true }
+tokio-util = "0.7"
