@@ -1,13 +1,10 @@
-#[cfg(not(feature = "cf-worker"))]
 use figment::{Figment, providers::Env};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use tracing::info;
 
-use crate::{sinks::lark::LarkBotClient, sources::linear::client::LinearClient};
-
-#[cfg(not(feature = "cf-worker"))]
 use crate::debounce::DebounceMap;
+use crate::{sinks::lark::LarkBotClient, sources::linear::client::LinearClient};
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct LinearConfig {
@@ -15,7 +12,6 @@ pub struct LinearConfig {
     pub api_key: Option<String>,
 }
 
-#[cfg(not(feature = "cf-worker"))]
 impl LinearConfig {
     pub fn from_env() -> Result<Self, Box<figment::Error>> {
         Figment::new()
@@ -23,22 +19,7 @@ impl LinearConfig {
             .extract()
             .map_err(Box::new)
     }
-}
 
-#[cfg(feature = "cf-worker")]
-impl LinearConfig {
-    pub fn from_worker_env(env: &worker::Env) -> Result<Self, String> {
-        Ok(Self {
-            webhook_secret: env
-                .secret("LINEAR_WEBHOOK_SECRET")
-                .map_err(|e| format!("LINEAR_WEBHOOK_SECRET: {e}"))?
-                .to_string(),
-            api_key: env.secret("LINEAR_API_KEY").ok().map(|s| s.to_string()),
-        })
-    }
-}
-
-impl LinearConfig {
     pub fn graphql_client(&self, http: &Client) -> Option<LinearClient> {
         self.api_key.as_ref().map(|key| {
             info!("LINEAR_API_KEY set – link preview enabled");
@@ -74,7 +55,6 @@ impl Default for LarkConfig {
     }
 }
 
-#[cfg(not(feature = "cf-worker"))]
 impl LarkConfig {
     pub fn from_env() -> Result<Self, Box<figment::Error>> {
         Figment::new()
@@ -83,32 +63,7 @@ impl LarkConfig {
             .extract()
             .map_err(Box::new)
     }
-}
 
-#[cfg(feature = "cf-worker")]
-impl LarkConfig {
-    pub fn from_worker_env(env: &worker::Env) -> Result<Self, String> {
-        Ok(Self {
-            webhook_url: env
-                .var("LARK_WEBHOOK_URL")
-                .map(|v| v.to_string())
-                .unwrap_or_default(),
-            app_id: env.var("LARK_APP_ID").ok().map(|v| v.to_string()),
-            app_secret: env.secret("LARK_APP_SECRET").ok().map(|s| s.to_string()),
-            verification_token: env
-                .secret("LARK_VERIFICATION_TOKEN")
-                .ok()
-                .map(|s| s.to_string()),
-            base_url: env
-                .var("LARK_BASE_URL")
-                .ok()
-                .map(|v| v.to_string())
-                .unwrap_or_else(default_lark_base_url),
-        })
-    }
-}
-
-impl LarkConfig {
     pub fn bot_client(&self, http: &Client) -> Option<LarkBotClient> {
         match (&self.app_id, &self.app_secret) {
             (Some(id), Some(secret)) => {
@@ -153,7 +108,6 @@ impl Default for ServerConfig {
     }
 }
 
-#[cfg(not(feature = "cf-worker"))]
 impl ServerConfig {
     pub fn from_env() -> Result<Self, Box<figment::Error>> {
         Figment::new()
@@ -161,24 +115,6 @@ impl ServerConfig {
             .merge(Env::raw().only(&["PORT", "DEBOUNCE_DELAY_MS"]))
             .extract()
             .map_err(Box::new)
-    }
-}
-
-#[cfg(feature = "cf-worker")]
-impl ServerConfig {
-    pub fn from_worker_env(env: &worker::Env) -> Result<Self, String> {
-        Ok(Self {
-            port: env
-                .var("PORT")
-                .ok()
-                .and_then(|v| v.to_string().parse().ok())
-                .unwrap_or_else(default_port),
-            debounce_delay_ms: env
-                .var("DEBOUNCE_DELAY_MS")
-                .ok()
-                .and_then(|v| v.to_string().parse().ok())
-                .unwrap_or_else(default_debounce),
-        })
     }
 }
 
@@ -190,20 +126,15 @@ pub struct AppState {
     pub http: Client,
     pub lark_bot: Option<LarkBotClient>,
     pub linear_client: Option<LinearClient>,
-    #[cfg(not(feature = "cf-worker"))]
     pub update_debounce: DebounceMap,
-    #[cfg(feature = "cf-worker")]
-    pub env: worker::Env,
 }
 
-#[cfg(not(feature = "cf-worker"))]
 #[derive(Debug, Deserialize, Default)]
 struct TopLevelToml {
     #[serde(rename = "linear-bridge", default)]
     linear_bridge: TomlSection,
 }
 
-#[cfg(not(feature = "cf-worker"))]
 #[derive(Debug, Deserialize, Default)]
 struct TomlSection {
     #[serde(default)]
@@ -214,14 +145,12 @@ struct TomlSection {
     server: TomlServer,
 }
 
-#[cfg(not(feature = "cf-worker"))]
 #[derive(Debug, Deserialize, Default)]
 struct TomlLinear {
     webhook_secret: Option<String>,
     api_key: Option<String>,
 }
 
-#[cfg(not(feature = "cf-worker"))]
 #[derive(Debug, Deserialize, Default)]
 struct TomlLark {
     webhook_url: Option<String>,
@@ -231,14 +160,12 @@ struct TomlLark {
     base_url: Option<String>,
 }
 
-#[cfg(not(feature = "cf-worker"))]
 #[derive(Debug, Deserialize, Default)]
 struct TomlServer {
     port: Option<u16>,
     debounce_delay_ms: Option<u64>,
 }
 
-#[cfg(not(feature = "cf-worker"))]
 impl AppState {
     pub fn from_env() -> Self {
         Self::from_parts(
@@ -314,29 +241,6 @@ impl AppState {
             lark_bot,
             linear_client,
             update_debounce: DebounceMap::new(),
-        }
-    }
-}
-
-#[cfg(feature = "cf-worker")]
-impl AppState {
-    pub fn from_worker_env(env: worker::Env) -> Self {
-        let linear = LinearConfig::from_worker_env(&env).expect("invalid linear config");
-        let lark = LarkConfig::from_worker_env(&env).expect("invalid lark config");
-        let server = ServerConfig::from_worker_env(&env).expect("invalid server config");
-
-        let http = Client::new();
-        let lark_bot = lark.bot_client(&http);
-        let linear_client = linear.graphql_client(&http);
-
-        Self {
-            linear,
-            lark,
-            server,
-            http,
-            lark_bot,
-            linear_client,
-            env,
         }
     }
 }

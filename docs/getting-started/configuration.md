@@ -1,8 +1,7 @@
 # Configuration
 
 Set these environment variables before running. On Railway / Docker, add them in the
-platform dashboard. On Cloudflare Workers, use `wrangler.toml` vars and `wrangler secret put`.
-
+platform dashboard.
 ![Linear API Configuration](../images/linear-api-config.jpeg)
 
 ## Environment variables
@@ -15,7 +14,7 @@ platform dashboard. On Cloudflare Workers, use `wrangler.toml` vars and `wrangle
 | `LARK_APP_SECRET` | No | Bot app secret — pair with `LARK_APP_ID` |
 | `LINEAR_API_KEY` | No | GraphQL API access — enables link previews |
 | `LARK_VERIFICATION_TOKEN` | No | Lark event callback verification |
-| `PORT` | No | Listen port, defaults to `3000` (ignored on Workers) |
+| `PORT` | No | Listen port, defaults to `3000` |
 | `DEBOUNCE_DELAY_MS` | No | Debounce window in ms, defaults to `5000` |
 
 ## Feature tiers

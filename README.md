@@ -25,7 +25,7 @@
 | :--- | :--- |
 | `crates/console` | Umbrella binary `larkstack-console` — tokio supervisor + axum API + embedded React UI |
 | `crates/control` | Shared types (`ControlPlane`, `EventStore`, action dispatch) |
-| `crates/linear-bridge` | Linear webhook → Lark notifications. Standalone bin still works (incl. Cloudflare Workers) |
+| `crates/linear-bridge` | Linear webhook → Lark notifications. Standalone bin still works |
 | `crates/meeting-digest` | Auto-transcribe Lark VC recordings and post digest cards |
 | `crates/standup-bot` | Daily standup reminders + on-demand chat commands |
 
@@ -67,7 +67,6 @@ If you only need one piece, each crate keeps its `[[bin]]` and can be deployed a
 | Target | Guide |
 | :--- | :--- |
 | linear-bridge → Railway/Docker | [docs/deploy/railway.md](./docs/deploy/railway.md) |
-| linear-bridge → Cloudflare Workers | [docs/deploy/cloudflare-workers.md](./docs/deploy/cloudflare-workers.md) |
 
 ## License
 

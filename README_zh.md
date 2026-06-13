@@ -23,7 +23,7 @@
 | :--- | :--- |
 | `crates/console` | umbrella binary `larkstack-console`——tokio 监管 + axum API + 内嵌 React UI |
 | `crates/control` | 共享类型（`ControlPlane`、`EventStore`、动作分发） |
-| `crates/linear-bridge` | Linear webhook → 飞书通知。仍可独立部署（含 Cloudflare Workers） |
+| `crates/linear-bridge` | Linear webhook → 飞书通知。仍可独立部署 |
 | `crates/meeting-digest` | 自动转写飞书 VC 录制并发送摘要卡片 |
 | `crates/standup-bot` | 每日站会提醒 + 群内命令 |
 
@@ -65,7 +65,6 @@ docker compose up -d
 | 目标 | 文档 |
 | :--- | :--- |
 | linear-bridge → Railway/Docker | [docs/deploy/railway.md](./docs/deploy/railway.md) |
-| linear-bridge → Cloudflare Workers | [docs/deploy/cloudflare-workers.md](./docs/deploy/cloudflare-workers.md) |
 
 ## 许可证
 

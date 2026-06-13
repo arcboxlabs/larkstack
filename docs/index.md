@@ -2,7 +2,7 @@
 
 Rust middleware that syncs [Linear](https://linear.app/) events to
 [Lark / Feishu](https://larksuite.com/) notifications. Runs as a native server
-(Tokio) or a Cloudflare Worker (WASM).
+(Tokio).
 
 ## What it does
 
@@ -26,4 +26,4 @@ Rust middleware that syncs [Linear](https://linear.app/) events to
 - [Quick start](getting-started/quickstart.md) — run LarkStack in under 5 minutes
 - [Configuration](getting-started/configuration.md) — environment variables reference
 - [Architecture](architecture.md) — how the codebase is organized
-- Deploy to [Railway](deploy/railway.md) or [Cloudflare Workers](deploy/cloudflare-workers.md)
+- Deploy to [Railway](deploy/railway.md)

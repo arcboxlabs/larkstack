@@ -16,7 +16,6 @@ use crate::{
     event::{Event, Priority},
 };
 
-#[cfg(not(feature = "cf-worker"))]
 use crate::debounce::PendingUpdate;
 
 use super::{
@@ -174,7 +173,6 @@ pub async fn webhook_handler(
     }
 }
 
-#[cfg(not(feature = "cf-worker"))]
 async fn schedule_debounce(
     state: &Arc<AppState>,
     issue_id: String,
@@ -198,52 +196,6 @@ async fn schedule_debounce(
             _ = cancel_rx => {}
         }
     });
-}
-
-#[cfg(feature = "cf-worker")]
-async fn schedule_debounce(
-    state: &Arc<AppState>,
-    issue_id: String,
-    event: Event,
-    dm_email: Option<String>,
-) {
-    let payload = serde_json::json!({
-        "event": event,
-        "dm_email": dm_email,
-        "delay_ms": state.server.debounce_delay_ms,
-    });
-
-    let body = serde_json::to_string(&payload).unwrap();
-
-    let stub = match state.env.durable_object("DEBOUNCER") {
-        Ok(ns) => match ns.get_by_name(&issue_id) {
-            Ok(stub) => stub,
-            Err(e) => {
-                error!("failed to get DO stub: {e}");
-                return;
-            }
-        },
-        Err(e) => {
-            error!("DEBOUNCER binding not found: {e}");
-            return;
-        }
-    };
-
-    let mut init = worker::RequestInit::new();
-    init.with_method(worker::Method::Post)
-        .with_body(Some(wasm_bindgen::JsValue::from_str(&body)));
-
-    let req = match worker::Request::new_with_init("https://do/schedule", &init) {
-        Ok(r) => r,
-        Err(e) => {
-            error!("failed to build DO request: {e}");
-            return;
-        }
-    };
-
-    if let Err(e) = stub.fetch_with_request(req).await {
-        error!("failed to schedule debounce via DO: {e}");
-    }
 }
 
 /// Converts a Linear [`Issue`] into an [`Event`].
@@ -290,7 +242,6 @@ fn issue_to_event(issue: &Issue, url: &str, changes: Vec<String>, is_create: boo
     }
 }
 
-#[cfg(not(feature = "cf-worker"))]
 async fn send_debounced_notification(state: &AppState, pending: PendingUpdate) {
     let kind = if pending.event.is_issue_created() {
         "create"

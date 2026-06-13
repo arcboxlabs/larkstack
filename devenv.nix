@@ -1,7 +1,7 @@
 { pkgs, ... }:
 
 {
-  # Rust toolchain — stable + extras for clippy/fmt/IDE + wasm target for cf-worker.
+  # Rust toolchain — stable + extras for clippy/fmt/IDE.
   languages.rust = {
     enable = true;
     channel = "stable";
@@ -13,7 +13,6 @@
       "rust-analyzer"
       "rust-src"
     ];
-    targets = [ "wasm32-unknown-unknown" ];
   };
 
   # protoc — required by the larkoapi build script (prost-build).

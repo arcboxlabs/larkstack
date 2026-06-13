@@ -8,7 +8,7 @@ Guidance for coding agents working in this repository.
 
 - **crates/console** — Umbrella binary `larkstack-console`. Spawns each subsystem as a tokio task, serves a React Web UI + admin API (axum). One process, one deploy.
 - **crates/control** — Shared types (`ControlPlane`, `ControlHandle`, `Status`). Each subsystem receives a `ControlHandle` to report status/events back to the console.
-- **crates/linear-bridge** (Rust) — Linear webhook → Lark notification bridge. Three-layer pipeline: `sources/` receive webhooks and normalize to a unified `Event`, `sinks/` format and deliver to channels, middle layer (`debounce`, `dispatch`) operates on `Event` only. Exposes `pub async fn run(state, handle)` for embedding into console; still has its own `[[bin]]` for standalone use (incl. CF Workers via the `cf-worker` feature).
+- **crates/linear-bridge** (Rust) — Linear webhook → Lark notification bridge. Three-layer pipeline: `sources/` receive webhooks and normalize to a unified `Event`, `sinks/` format and deliver to channels, middle layer (`debounce`, `dispatch`) operates on `Event` only. Exposes `pub async fn run(state, handle)` for embedding into console; still has its own `[[bin]]` for standalone use.
 - **crates/meeting-digest** (Rust) — Auto-transcribe Lark/Feishu recorded meetings and post digest cards. STT via `whisper-api` or `whisper-cpp` (feature flag). Uses `larkoapi` for all Lark API surface (meeting metadata, minute media, docx/drive, IM cards).
 - **crates/standup-bot** (Rust) — Daily standup reminder bot. Scheduler + on-demand CLI subcommands (`announce`, `ensure`, `remind`, `urgent`, `check`). Uses `larkoapi` over a WebSocket long connection.
 
@@ -19,7 +19,7 @@ Single workspace `Cargo.lock` at the root. Each subsystem keeps its `[[bin]]` so
 ## Development Environment
 
 The repo uses **[devenv](https://devenv.sh)** (`devenv.nix` + `devenv.yaml`) with **direnv** for auto-activation.
-On entering the directory the dev shell auto-loads Rust stable (with `wasm32-unknown-unknown` target, clippy, rustfmt, rust-analyzer) and `protoc` (required by the `larkoapi` build script).
+On entering the directory the dev shell auto-loads Rust stable (clippy, rustfmt, rust-analyzer) and `protoc` (required by the `larkoapi` build script).
 
 ```bash
 # Prereqs: Nix (flakes enabled), direnv, devenv (`nix profile install nixpkgs#devenv`)
@@ -45,26 +45,18 @@ cargo build -p standup-bot --release
 
 # Frontend (required before `cargo build -p console` for a non-stub UI)
 cd crates/console/web && npm install && npm run build
-
-# CF Worker (linear-bridge only — the console bundle can't target Workers)
-cd crates/linear-bridge && cargo check --no-default-features --features cf-worker --lib
-cd crates/linear-bridge && worker-build --release
 ```
 
-The mutually-exclusive `native` / `cf-worker` features in `linear-bridge` mean `cargo clippy --all-features` will hit the `compile_error!` guard. Use the workspace clippy command above (default features per crate) instead.
-
 ## crates/linear-bridge
-
-Dual deployment: native (Tokio, default feature `native`) or Cloudflare Workers (feature `cf-worker`). Mutually exclusive — compile error if both are enabled.
 
 - `src/sources/linear/` — Webhook handler (HMAC-SHA256 verification), GraphQL client for link previews
 - `src/sinks/lark/` — Bot client (tenant token caching), webhook sender, interactive cards, event handler
 - `src/event.rs` — Unified `Event` enum (`IssueCreated`/`Updated`, `CommentCreated`) with `Priority` normalization
-- `src/debounce.rs` — Native in-memory debounce (tokio tasks + oneshot cancel); `debounce_do.rs` for CF Durable Objects
+- `src/debounce.rs` — In-memory debounce (tokio tasks + oneshot cancel)
 - `src/dispatch.rs` — Routes events to all sinks
 - `src/config.rs` — `figment` + env vars prefixed `LINEAR_`, `LARK_`
 
-Routes: `POST /webhook`, `POST /lark/event`, `GET /health`. `Dockerfile` and `wrangler.toml` live inside this crate — standalone Railway/CF deploys target `crates/linear-bridge/`. The console bundle exposes the same routes (it embeds `linear_bridge::run`).
+Routes: `POST /webhook`, `POST /lark/event`, `GET /health`. A `Dockerfile` lives inside this crate — standalone Railway deploys target `crates/linear-bridge/`. The console bundle exposes the same routes (it embeds `linear_bridge::run`).
 
 ## crates/console
 

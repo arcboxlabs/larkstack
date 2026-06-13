@@ -24,11 +24,10 @@ crates/linear-bridge/src/
 │       └── models.rs
 ├── event.rs             # Unified Event enum (IssueCreated, IssueUpdated, CommentCreated)
 ├── dispatch.rs          # Routes an Event to all sinks
-├── debounce.rs          # Native: in-memory DebounceMap + tokio timers
-├── debounce_do.rs       # CF Workers: Durable Object + alarm
-├── config.rs            # AppState, env var parsing (figment / worker::Env)
-├── main.rs              # Native entrypoint (axum + tokio)
-└── lib.rs               # Feature-gated CF Worker entrypoint
+├── debounce.rs          # In-memory DebounceMap + tokio timers
+├── config.rs            # AppState, env var parsing (figment)
+├── main.rs              # Standalone entrypoint (axum + tokio)
+└── lib.rs               # Library root (re-exports run + handle_actions)
 ```
 
 ## Data flow
@@ -41,23 +40,11 @@ window), then dispatch sends it to every registered sink.
 Currently there is one source (Linear) and one sink (Lark), but the pipeline is
 designed so either side can be extended independently.
 
-## Feature flags
-
-The crate has two mutually exclusive feature flags:
-
-| Flag | Runtime | Debounce strategy |
-| :--- | :--- | :--- |
-| `native` (default) | Tokio multi-thread | In-memory `DebounceMap` + `tokio::spawn` |
-| `cf-worker` | V8 isolate (WASM) | Durable Object + alarm API |
-
-Both share the same source/sink/event code. Only the entrypoint and debounce
-implementation differ.
-
 ## Dependencies
 
-- `axum 0.8` — HTTP routing (used in both native and Worker builds)
-- `tokio` — async runtime (full features in native, sync-only in Worker)
+- `axum 0.8` — HTTP routing
+- `tokio` — async runtime
 - `reqwest 0.12` — HTTP client for outbound Lark / Linear API calls
-- `figment` — config from env vars (native only)
-- `worker` — Cloudflare Workers bindings (Worker only)
+- `figment` — config from env vars
+- `larkoapi` — Lark Bot client + card types
 - `hmac` + `sha2` — webhook signature verification

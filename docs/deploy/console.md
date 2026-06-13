@@ -84,8 +84,6 @@ will see the same lines that show up in the events tab.
 
 Each subsystem still has its own `[[bin]]` for standalone deployments
 (`cargo run -p linear-bridge`, etc.). Use those when you only need one
-piece — for example, the existing CF Worker deploy of `linear-bridge`. See
-the per-crate docs:
+piece. See the per-crate docs:
 
-- [linear-bridge → Cloudflare Workers](cloudflare-workers.md)
 - [linear-bridge → Railway](railway.md)

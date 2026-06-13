@@ -44,5 +44,4 @@ within a few seconds.
 ## What's next
 
 - See [Configuration](configuration.md) for optional features (DM on assign, link previews).
-- Ready to go live? Pick a deployment target: [Railway](../deploy/railway.md) or
-  [Cloudflare Workers](../deploy/cloudflare-workers.md).
+- Ready to go live? Deploy to [Railway](../deploy/railway.md).

@@ -43,5 +43,4 @@ toggle.name = "Switch to light mode"
 [[project.nav]]
 "Deployment" = [
     { "Railway / Docker" = "deploy/railway.md" },
-    { "Cloudflare Workers" = "deploy/cloudflare-workers.md" },
 ]
