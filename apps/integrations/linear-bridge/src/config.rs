@@ -7,7 +7,10 @@ use serde::{Deserialize, Serialize};
 use tracing::info;
 
 use crate::debounce::DebounceMap;
-use crate::{sinks::lark::LarkBotClient, sources::linear::client::LinearClient};
+use crate::{
+    sinks::lark::LarkBotClient,
+    sources::{linear::client::LinearClient, x::XClient},
+};
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct LinearConfig {
@@ -46,7 +49,13 @@ pub struct LarkConfig {
     pub github_webhook_url: String,
     pub app_id: Option<String>,
     pub app_secret: Option<String>,
+    /// Verification token for the Linear link-preview app's event callbacks.
     pub verification_token: Option<String>,
+    /// Verification token for the X link-preview app (a separate Lark app);
+    /// callbacks carrying either token are accepted.
+    pub x_verification_token: Option<String>,
+    /// Encrypt key for the X link-preview app — decrypts AES-256-CBC callbacks.
+    pub x_encrypt_key: Option<String>,
     #[serde(default = "default_lark_base_url")]
     pub base_url: String,
 }
@@ -59,6 +68,8 @@ impl Default for LarkConfig {
             app_id: None,
             app_secret: None,
             verification_token: None,
+            x_verification_token: None,
+            x_encrypt_key: None,
             base_url: default_lark_base_url(),
         }
     }
@@ -211,6 +222,7 @@ pub struct AppState {
     pub http: Client,
     pub lark_bot: Option<LarkBotClient>,
     pub linear_client: Option<LinearClient>,
+    pub x_client: XClient,
     pub update_debounce: DebounceMap,
 }
 
@@ -249,6 +261,8 @@ struct TomlLark {
     app_id: Option<String>,
     app_secret: Option<String>,
     verification_token: Option<String>,
+    x_verification_token: Option<String>,
+    x_encrypt_key: Option<String>,
     base_url: Option<String>,
 }
 
@@ -322,6 +336,12 @@ impl AppState {
         if parsed.lark.verification_token.is_some() {
             lark.verification_token = parsed.lark.verification_token;
         }
+        if parsed.lark.x_verification_token.is_some() {
+            lark.x_verification_token = parsed.lark.x_verification_token;
+        }
+        if parsed.lark.x_encrypt_key.is_some() {
+            lark.x_encrypt_key = parsed.lark.x_encrypt_key;
+        }
         if let Some(s) = parsed.lark.base_url {
             lark.base_url = s;
         }
@@ -372,9 +392,13 @@ impl AppState {
         let http = Client::new();
         let lark_bot = lark.bot_client(&http);
         let linear_client = linear.graphql_client(&http);
+        let x_client = XClient::new(std::env::var("X_BEARER_TOKEN").ok(), http.clone());
 
         if lark.verification_token.is_some() {
             info!("LARK_VERIFICATION_TOKEN set – event verification enabled");
+        }
+        if lark.x_encrypt_key.is_some() {
+            info!("LARK_X_ENCRYPT_KEY set – encrypted X event callbacks enabled");
         }
         if let Some(gh) = &github {
             info!("GITHUB_WEBHOOK_SECRET set – GitHub webhook source enabled");
@@ -392,6 +416,7 @@ impl AppState {
             http,
             lark_bot,
             linear_client,
+            x_client,
             update_debounce: DebounceMap::new(),
         }
     }

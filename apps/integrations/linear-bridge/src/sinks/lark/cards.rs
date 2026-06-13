@@ -4,7 +4,7 @@ use serde_json::{Value, json};
 
 use crate::{
     event::{Event, Priority},
-    sources::linear::models::LinearIssueData,
+    sources::{linear::models::LinearIssueData, x::TweetData},
     utils::truncate,
 };
 
@@ -606,4 +606,68 @@ fn build_dependabot_card(
         build_link_button(url, "View Alert"),
     ];
     build_card(color, format!("[{repo}] Dependabot Alert"), elements)
+}
+
+// ---------------------------------------------------------------------------
+// X (Twitter) preview card
+// ---------------------------------------------------------------------------
+
+/// Builds an inline preview card from fetched tweet data. Returns
+/// `(card, inline_title)` — the inline title is the short text shown in chat
+/// before the card expands. Does **not** go through [`Event`].
+pub fn build_x_preview_card(tweet: &TweetData) -> (LarkCard, String) {
+    let author_at = if tweet.author_username.is_empty() {
+        tweet.author_name.clone()
+    } else {
+        format!("@{}", tweet.author_username)
+    };
+
+    let mut elements = vec![];
+    if !tweet.text.is_empty() {
+        elements.push(json!({
+            "tag": "markdown",
+            "content": truncate(&tweet.text, 200),
+        }));
+    }
+
+    let note = if tweet.like_count.is_some() || tweet.retweet_count.is_some() {
+        let likes = tweet.like_count.unwrap_or(0);
+        let retweets = tweet.retweet_count.unwrap_or(0);
+        format!("❤️ {likes}  🔁 {retweets}  •  {author_at} on X")
+    } else if !author_at.is_empty() {
+        format!("From {author_at} on X")
+    } else {
+        String::new()
+    };
+    if !note.is_empty() {
+        elements.push(md_div(&note));
+    }
+    elements.push(build_link_button(&tweet.url, "View on X"));
+
+    let header_title = if tweet.author_name.is_empty() {
+        "X Post".to_string()
+    } else {
+        tweet.author_name.clone()
+    };
+    let card = LarkCard {
+        config: None,
+        header: LarkHeader {
+            template: "blue".to_string(),
+            title: LarkTitle {
+                content: header_title,
+                tag: "plain_text",
+            },
+        },
+        elements,
+    };
+
+    let inline_title = if !author_at.is_empty() && !tweet.text.is_empty() {
+        format!("{}: {}...", author_at, truncate(&tweet.text, 30))
+    } else if !author_at.is_empty() {
+        format!("Post by {author_at}")
+    } else {
+        "X Post".to_string()
+    };
+
+    (card, inline_title)
 }

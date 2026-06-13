@@ -93,16 +93,17 @@ Thin binary: `Larkstack::new().register(linear_bridge::app()).register(meeting_d
 
 ## apps/integrations/linear-bridge
 
-A Linear **and** GitHub → Lark bridge: two sources normalize into one `Event` model, one Lark sink renders cards.
+A Linear + GitHub + X → Lark bridge: sources normalize into one `Event` model (or, for X, an on-demand preview), one Lark sink renders cards.
 
 - `src/sources/linear/` — Webhook handler (HMAC-SHA256 verification), GraphQL client for link previews
 - `src/sources/github/` — `POST /github/webhook`: `X-Hub-Signature-256` HMAC verify, repo whitelist, octocrab (`default-features = false`, native webhook models) → `Event`; dispatches immediately (no debounce). Handles PR opened / review-requested / merged, alert-labeled issues, failed CI runs, secret-scanning + critical/high Dependabot alerts
-- `src/sinks/lark/` — Bot client + card types re-exported from `larkoapi`, webhook sender, interactive cards, event handler
+- `src/sources/x/` — `XClient` fetches tweet data (fxtwitter → X API v2 → oEmbed) for link previews. Unlike the others it produces a preview card on demand, **not** an `Event`
+- `src/sinks/lark/` — Bot client + card types re-exported from `larkoapi`, webhook sender, interactive cards. `event_handler` serves `POST /lark/event`: AES-256-CBC decrypt (X app Encrypt Key), dual verification-token check, and `url.preview.get` unfurling for Linear issues + X posts
 - `src/event.rs` — Unified `Event` enum: Linear (`IssueCreated`/`Updated`, `CommentCreated`) + GitHub (`PrOpened`, `PrReviewRequested`, `PrMerged`, `IssueLabeledAlert`, `WorkflowRunFailed`, `SecretScanningAlert`, `DependabotAlert`); `Priority` normalization
-- `src/utils.rs` — `verify_hmac_sha256` (shared by both sources) + `truncate`
+- `src/utils.rs` — `verify_hmac_sha256` (shared by the Linear + GitHub sources) + `truncate`
 - `src/debounce.rs` — In-memory debounce (tokio tasks + oneshot cancel); Linear issues only
 - `src/dispatch.rs` — `dispatch` (Linear) / `dispatch_github` route an event to the Lark group webhook + optional DM; GitHub uses `lark.github_webhook_url` (falls back to `webhook_url`)
-- `src/config.rs` — `figment` + env vars prefixed `LINEAR_`, `LARK_`, `GITHUB_`; `GitHubConfig` present only when a webhook secret is set; `AppState::from_toml(full_toml)`
+- `src/config.rs` — `figment` + env vars prefixed `LINEAR_`, `LARK_`, `GITHUB_` (+ `X_BEARER_TOKEN`); `GitHubConfig` present only when a webhook secret is set; `AppState::from_toml(full_toml)`
 - `src/app.rs` — `App`/`Instance` impl; `run::serve(cancel)` binds the webhook server, `actions::handle(...)` runs `ping`/`test-lark`
 
 Routes (the app's own axum server on its configured port): `POST /webhook`, `POST /github/webhook`, `POST /lark/event`, `GET /health`. A `Dockerfile` lives inside this crate for standalone Railway deploys.

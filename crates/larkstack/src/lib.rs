@@ -69,7 +69,9 @@ enabled = false
 # github_webhook_url = ""   # GitHub notices group chat; falls back to webhook_url
 # app_id = ""
 # app_secret = ""
-# verification_token = ""
+# verification_token = ""      # Linear link-preview app's event-callback token
+# x_verification_token = ""    # X link-preview app (separate Lark app) token
+# x_encrypt_key = ""           # X app Encrypt Key; decrypts AES-256-CBC callbacks
 # base_url = "https://open.larksuite.com"
 [linear-bridge.server]
 # port = 3000
