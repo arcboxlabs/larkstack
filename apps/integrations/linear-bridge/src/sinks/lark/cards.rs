@@ -51,15 +51,46 @@ fn build_fields(status: &str, priority: &str, assignee: Option<&str>) -> Value {
 
 /// Builds a "View in Linear" action button element.
 fn build_action_button(url: &str) -> Value {
+    build_link_button(url, "View in Linear")
+}
+
+/// Builds a single-button action row linking to `url` with a custom label.
+fn build_link_button(url: &str, label: &str) -> Value {
     json!({
         "tag": "action",
         "actions": [{
             "tag": "button",
-            "text": { "tag": "plain_text", "content": "View in Linear" },
+            "text": { "tag": "plain_text", "content": label },
             "type": "primary",
             "url": url,
         }]
     })
+}
+
+/// A `lark_md` text div element.
+fn md_div(content: &str) -> Value {
+    json!({
+        "tag": "div",
+        "text": { "tag": "lark_md", "content": content },
+    })
+}
+
+/// Wraps `elements` in an interactive [`LarkMessage`] with a colored header.
+fn build_card(color: &str, header_text: String, elements: Vec<Value>) -> LarkMessage {
+    LarkMessage {
+        msg_type: "interactive",
+        card: LarkCard {
+            config: None,
+            header: LarkHeader {
+                template: color.to_string(),
+                title: LarkTitle {
+                    content: header_text,
+                    tag: "plain_text",
+                },
+            },
+            elements,
+        },
+    }
 }
 
 /// Formats an [`Event`] as a [`LarkMessage`] for group webhook delivery.
@@ -114,6 +145,82 @@ pub fn build_lark_card(event: &Event) -> LarkMessage {
             url,
             ..
         } => build_comment_card(identifier, issue_title, author, body, url),
+
+        // --- GitHub events ---
+        Event::PrOpened {
+            repo,
+            number,
+            title,
+            author,
+            head_branch,
+            base_branch,
+            additions,
+            deletions,
+            url,
+        } => build_pr_opened_card(
+            repo,
+            *number,
+            title,
+            author,
+            head_branch,
+            base_branch,
+            *additions,
+            *deletions,
+            url,
+        ),
+        Event::PrReviewRequested {
+            repo,
+            number,
+            title,
+            author,
+            reviewer,
+            reviewer_lark_id,
+            url,
+        } => build_pr_review_requested_card(
+            repo,
+            *number,
+            title,
+            author,
+            reviewer,
+            reviewer_lark_id.as_deref(),
+            url,
+        ),
+        Event::PrMerged {
+            repo,
+            number,
+            title,
+            author,
+            merged_by,
+            url,
+        } => build_pr_merged_card(repo, *number, title, author, merged_by, url),
+        Event::IssueLabeledAlert {
+            repo,
+            number,
+            title,
+            label,
+            author,
+            url,
+        } => build_issue_labeled_card(repo, *number, title, label, author, url),
+        Event::WorkflowRunFailed {
+            repo,
+            workflow_name,
+            branch,
+            actor,
+            url,
+            ..
+        } => build_workflow_failed_card(repo, workflow_name, branch, actor, url),
+        Event::SecretScanningAlert {
+            repo,
+            secret_type,
+            url,
+        } => build_secret_scanning_card(repo, secret_type, url),
+        Event::DependabotAlert {
+            repo,
+            package,
+            severity,
+            summary,
+            url,
+        } => build_dependabot_card(repo, package, severity, summary, url),
     }
 }
 
@@ -241,13 +348,10 @@ fn build_comment_card(
     }
 }
 
-/// Builds a DM card notifying the assignee about an issue event.
-///
-/// # Panics
-///
-/// Panics if called with [`Event::CommentCreated`].
-pub fn build_assign_dm_card(event: &Event) -> LarkCard {
-    let (identifier, title, status, priority, url) = match event {
+/// Builds a DM card for assignment (Linear) or review-request (GitHub)
+/// notifications. Returns `None` for events that don't warrant a DM.
+pub fn build_assign_dm_card(event: &Event) -> Option<LarkCard> {
+    match event {
         Event::IssueCreated {
             identifier,
             title,
@@ -263,42 +367,54 @@ pub fn build_assign_dm_card(event: &Event) -> LarkCard {
             priority,
             url,
             ..
-        } => (
-            identifier.as_str(),
-            title.as_str(),
-            status.as_str(),
-            priority,
-            url.as_str(),
-        ),
-        Event::CommentCreated { .. } => unreachable!("build_assign_dm_card called with comment"),
-    };
-
-    let mut elements = vec![];
-
-    elements.push(json!({
-        "tag": "div",
-        "text": {
-            "tag": "lark_md",
-            "content": format!(
-                "You've been assigned to **{}**\n{}",
-                identifier, title
-            ),
+        } => {
+            let elements = vec![
+                md_div(&format!(
+                    "You've been assigned to **{identifier}**\n{title}"
+                )),
+                build_fields(status, &priority.display(), None),
+                build_action_button(url),
+            ];
+            Some(LarkCard {
+                config: None,
+                header: LarkHeader {
+                    template: priority_color(priority).to_string(),
+                    title: LarkTitle {
+                        content: format!("[Linear] Assigned: {identifier}"),
+                        tag: "plain_text",
+                    },
+                },
+                elements,
+            })
         }
-    }));
-
-    elements.push(build_fields(status, &priority.display(), None));
-    elements.push(build_action_button(url));
-
-    LarkCard {
-        config: None,
-        header: LarkHeader {
-            template: priority_color(priority).to_string(),
-            title: LarkTitle {
-                content: format!("[Linear] Assigned: {identifier}"),
-                tag: "plain_text",
-            },
-        },
-        elements,
+        Event::PrReviewRequested {
+            repo,
+            number,
+            title,
+            author,
+            url,
+            ..
+        } => {
+            let elements = vec![
+                md_div(&format!(
+                    "**{author}** requested your review on **#{number}**\n{title}"
+                )),
+                md_div(&format!("**Repository:** {repo}")),
+                build_link_button(url, "View on GitHub"),
+            ];
+            Some(LarkCard {
+                config: None,
+                header: LarkHeader {
+                    template: "yellow".to_string(),
+                    title: LarkTitle {
+                        content: format!("[{repo}] Review Requested #{number}"),
+                        tag: "plain_text",
+                    },
+                },
+                elements,
+            })
+        }
+        _ => None,
     }
 }
 
@@ -355,4 +471,139 @@ pub fn build_preview_card(issue: &LinearIssueData) -> LarkCard {
         },
         elements,
     }
+}
+
+// ---------------------------------------------------------------------------
+// GitHub card builders (private)
+// ---------------------------------------------------------------------------
+
+#[allow(clippy::too_many_arguments)]
+fn build_pr_opened_card(
+    repo: &str,
+    number: u64,
+    title: &str,
+    author: &str,
+    head_branch: &str,
+    base_branch: &str,
+    additions: u64,
+    deletions: u64,
+    url: &str,
+) -> LarkMessage {
+    let elements = vec![
+        md_div(&format!("**{title}**")),
+        md_div(&format!(
+            "**Branch:** `{head_branch}` → `{base_branch}`\n**Changes:** +{additions} / -{deletions}"
+        )),
+        md_div(&format!("**Author:** {author}")),
+        build_link_button(url, "View on GitHub"),
+    ];
+    build_card("purple", format!("[{repo}] PR Opened #{number}"), elements)
+}
+
+fn build_pr_review_requested_card(
+    repo: &str,
+    number: u64,
+    title: &str,
+    author: &str,
+    reviewer: &str,
+    reviewer_lark_id: Option<&str>,
+    url: &str,
+) -> LarkMessage {
+    let reviewer_display = match reviewer_lark_id {
+        Some(email) => format!("<at email={email}></at>"),
+        None => reviewer.to_string(),
+    };
+    let elements = vec![
+        md_div(&format!("**{title}**")),
+        md_div(&format!(
+            "**Reviewer:** {reviewer_display}\n**Author:** {author}"
+        )),
+        build_link_button(url, "View on GitHub"),
+    ];
+    build_card(
+        "yellow",
+        format!("[{repo}] Review Requested #{number}"),
+        elements,
+    )
+}
+
+fn build_pr_merged_card(
+    repo: &str,
+    number: u64,
+    title: &str,
+    author: &str,
+    merged_by: &str,
+    url: &str,
+) -> LarkMessage {
+    let elements = vec![
+        md_div(&format!("**{title}**")),
+        md_div(&format!("**Merged by:** {merged_by}\n**Author:** {author}")),
+        build_link_button(url, "View on GitHub"),
+    ];
+    build_card("green", format!("[{repo}] PR Merged #{number}"), elements)
+}
+
+fn build_issue_labeled_card(
+    repo: &str,
+    number: u64,
+    title: &str,
+    label: &str,
+    author: &str,
+    url: &str,
+) -> LarkMessage {
+    let elements = vec![
+        md_div(&format!("**{title}**")),
+        md_div(&format!("**Label:** `{label}`\n**Author:** {author}")),
+        build_link_button(url, "View on GitHub"),
+    ];
+    build_card("red", format!("[{repo}] Issue Alert #{number}"), elements)
+}
+
+fn build_workflow_failed_card(
+    repo: &str,
+    workflow_name: &str,
+    branch: &str,
+    actor: &str,
+    url: &str,
+) -> LarkMessage {
+    let elements = vec![
+        md_div(&format!("**Workflow:** {workflow_name}")),
+        md_div(&format!(
+            "**Branch:** `{branch}`\n**Triggered by:** {actor}"
+        )),
+        build_link_button(url, "View Workflow Run"),
+    ];
+    build_card("red", format!("[{repo}] CI Failed"), elements)
+}
+
+fn build_secret_scanning_card(repo: &str, secret_type: &str, url: &str) -> LarkMessage {
+    let elements = vec![
+        md_div(&format!(
+            "**Secret type:** {secret_type}\n\nA leaked credential was detected in the repository. Rotate this secret immediately."
+        )),
+        build_link_button(url, "View Alert"),
+    ];
+    build_card("red", format!("[{repo}] Secret Leaked"), elements)
+}
+
+fn build_dependabot_card(
+    repo: &str,
+    package: &str,
+    severity: &str,
+    summary: &str,
+    url: &str,
+) -> LarkMessage {
+    let color = if severity == "critical" {
+        "red"
+    } else {
+        "orange"
+    };
+    let elements = vec![
+        md_div(&format!(
+            "**Package:** `{package}`\n**Severity:** {severity}"
+        )),
+        md_div(summary),
+        build_link_button(url, "View Alert"),
+    ];
+    build_card(color, format!("[{repo}] Dependabot Alert"), elements)
 }

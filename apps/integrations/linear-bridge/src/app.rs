@@ -20,7 +20,7 @@ impl App for LinearBridgeApp {
         Manifest {
             name: "linear-bridge".into(),
             kind: Kind::Integration,
-            description: "Linear webhook → Lark notification bridge".into(),
+            description: "Linear + GitHub webhook → Lark notification bridge".into(),
             actions: vec![
                 ActionSpec::new("ping", "Log a pong — liveness check"),
                 ActionSpec::new("test-lark", "Send a test message to the Lark group webhook"),

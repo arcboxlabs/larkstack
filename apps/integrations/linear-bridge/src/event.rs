@@ -1,7 +1,7 @@
 //! Unified event model — the middle layer between sources and sinks.
 //!
-//! Every source converts its platform-specific payload into an [`Event`],
-//! which sinks consume without knowing the origin.
+//! Every source (Linear, GitHub) converts its platform-specific payload into an
+//! [`Event`], which sinks consume without knowing the origin.
 
 use serde::{Deserialize, Serialize};
 
@@ -58,6 +58,7 @@ impl Priority {
 /// A normalized event produced by a source and consumed by sinks.
 #[derive(Serialize, Deserialize)]
 pub enum Event {
+    // --- Linear events ---
     IssueCreated {
         #[allow(dead_code)]
         source: String,
@@ -95,24 +96,84 @@ pub enum Event {
         body: String,
         url: String,
     },
+
+    // --- GitHub events ---
+    PrOpened {
+        repo: String,
+        number: u64,
+        title: String,
+        author: String,
+        head_branch: String,
+        base_branch: String,
+        additions: u64,
+        deletions: u64,
+        url: String,
+    },
+    PrReviewRequested {
+        repo: String,
+        number: u64,
+        title: String,
+        author: String,
+        reviewer: String,
+        /// Resolved Lark email for the reviewer (for an `<at>` mention), if mapped.
+        reviewer_lark_id: Option<String>,
+        url: String,
+    },
+    PrMerged {
+        repo: String,
+        number: u64,
+        title: String,
+        author: String,
+        merged_by: String,
+        url: String,
+    },
+    IssueLabeledAlert {
+        repo: String,
+        number: u64,
+        title: String,
+        label: String,
+        author: String,
+        url: String,
+    },
+    WorkflowRunFailed {
+        repo: String,
+        workflow_name: String,
+        branch: String,
+        actor: String,
+        #[allow(dead_code)]
+        conclusion: String,
+        url: String,
+    },
+    SecretScanningAlert {
+        repo: String,
+        secret_type: String,
+        url: String,
+    },
+    DependabotAlert {
+        repo: String,
+        package: String,
+        severity: String,
+        summary: String,
+        url: String,
+    },
 }
 
 impl Event {
-    /// Returns the accumulated change descriptions (empty for comments).
+    /// Returns the accumulated change descriptions (empty for non-issue events).
     pub fn changes(&self) -> &[String] {
         match self {
             Event::IssueCreated { changes, .. } | Event::IssueUpdated { changes, .. } => changes,
-            Event::CommentCreated { .. } => &[],
+            _ => &[],
         }
     }
 
-    /// Replaces the change descriptions (no-op for comments).
+    /// Replaces the change descriptions (no-op for non-issue events).
     pub fn set_changes(&mut self, new_changes: Vec<String>) {
         match self {
             Event::IssueCreated { changes, .. } | Event::IssueUpdated { changes, .. } => {
                 *changes = new_changes;
             }
-            Event::CommentCreated { .. } => {}
+            _ => {}
         }
     }
 

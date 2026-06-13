@@ -22,6 +22,10 @@ pub async fn serve(state: Arc<AppState>, cancel: CancellationToken) -> anyhow::R
 
     let app = Router::new()
         .route("/webhook", post(crate::sources::linear::webhook_handler))
+        .route(
+            "/github/webhook",
+            post(crate::sources::github::webhook_handler),
+        )
         .route("/lark/event", post(crate::sinks::lark::lark_event_handler))
         .route("/health", get(health))
         .with_state(state);

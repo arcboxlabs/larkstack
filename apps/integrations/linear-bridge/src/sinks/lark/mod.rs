@@ -20,10 +20,13 @@ pub async fn notify(event: &Event, http: &Client, webhook_url: &str) {
     webhook::send_lark_card(http, webhook_url, &card).await;
 }
 
-/// DMs the assignee about `event` (no-op when `bot` is `None`).
+/// DMs the recipient about `event` (assignment or review request). No-op for
+/// event types that don't warrant a DM.
 pub async fn try_dm(event: &Event, bot: &LarkBotClient, email: &str) {
-    let card = cards::build_assign_dm_card(event);
+    let Some(card) = cards::build_assign_dm_card(event) else {
+        return;
+    };
     if let Err(e) = bot.send_dm(email, &card).await {
-        error!("failed to DM assignee {email}: {e}");
+        error!("failed to DM {email}: {e}");
     }
 }

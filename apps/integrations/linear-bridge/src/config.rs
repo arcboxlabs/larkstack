@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use figment::{Figment, providers::Env};
 use larkstack_core::LarkRegistry;
 use reqwest::Client;
@@ -35,8 +37,13 @@ fn default_lark_base_url() -> String {
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct LarkConfig {
+    /// Incoming webhook URL for the Linear notification group chat.
     #[serde(default)]
     pub webhook_url: String,
+    /// Incoming webhook URL for GitHub notifications. Falls back to
+    /// `webhook_url` when empty.
+    #[serde(default)]
+    pub github_webhook_url: String,
     pub app_id: Option<String>,
     pub app_secret: Option<String>,
     pub verification_token: Option<String>,
@@ -48,6 +55,7 @@ impl Default for LarkConfig {
     fn default() -> Self {
         Self {
             webhook_url: String::new(),
+            github_webhook_url: String::new(),
             app_id: None,
             app_secret: None,
             verification_token: None,
@@ -119,11 +127,87 @@ impl ServerConfig {
     }
 }
 
+fn default_alert_labels() -> Vec<String> {
+    vec!["bug".into(), "urgent".into(), "p0".into()]
+}
+
+/// GitHub webhook source configuration. Present only when a webhook secret is
+/// set — its absence disables the `/github/webhook` endpoint.
+#[derive(Debug)]
+pub struct GitHubConfig {
+    /// HMAC secret for `X-Hub-Signature-256` verification.
+    pub webhook_secret: String,
+    /// GitHub login → Lark email, for review-request DMs and `<at>` mentions.
+    pub user_map: HashMap<String, String>,
+    /// Issue labels (lowercased) that trigger an alert card when applied.
+    pub alert_labels: Vec<String>,
+    /// Repo names to accept events from. Empty = all repos.
+    pub repo_whitelist: Vec<String>,
+}
+
+impl Default for GitHubConfig {
+    fn default() -> Self {
+        Self {
+            webhook_secret: String::new(),
+            user_map: HashMap::new(),
+            alert_labels: default_alert_labels(),
+            repo_whitelist: Vec::new(),
+        }
+    }
+}
+
+impl GitHubConfig {
+    /// Loads from `GITHUB_*` env vars. `None` when `GITHUB_WEBHOOK_SECRET` is
+    /// unset/empty (the source stays disabled).
+    pub fn from_env() -> Option<Self> {
+        let webhook_secret = std::env::var("GITHUB_WEBHOOK_SECRET")
+            .ok()
+            .filter(|s| !s.is_empty())?;
+
+        let user_map = std::env::var("GITHUB_USER_MAP")
+            .ok()
+            .and_then(|s| serde_json::from_str(&s).ok())
+            .unwrap_or_default();
+
+        let alert_labels = std::env::var("GITHUB_ALERT_LABELS")
+            .ok()
+            .map(|s| split_csv_lower(&s))
+            .unwrap_or_else(default_alert_labels);
+
+        let repo_whitelist = std::env::var("GITHUB_REPO_WHITELIST")
+            .ok()
+            .map(|s| split_csv(&s))
+            .unwrap_or_default();
+
+        Some(Self {
+            webhook_secret,
+            user_map,
+            alert_labels,
+            repo_whitelist,
+        })
+    }
+}
+
+fn split_csv(s: &str) -> Vec<String> {
+    s.split(',')
+        .map(|r| r.trim().to_string())
+        .filter(|r| !r.is_empty())
+        .collect()
+}
+
+fn split_csv_lower(s: &str) -> Vec<String> {
+    s.split(',')
+        .map(|r| r.trim().to_lowercase())
+        .filter(|r| !r.is_empty())
+        .collect()
+}
+
 /// Shared application state, wrapped in `Arc` and passed to every handler.
 pub struct AppState {
     pub linear: LinearConfig,
     pub lark: LarkConfig,
     pub server: ServerConfig,
+    pub github: Option<GitHubConfig>,
     pub http: Client,
     pub lark_bot: Option<LarkBotClient>,
     pub linear_client: Option<LinearClient>,
@@ -148,6 +232,8 @@ struct TomlSection {
     lark: TomlLark,
     #[serde(default)]
     server: TomlServer,
+    #[serde(default)]
+    github: TomlGitHub,
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -159,6 +245,7 @@ struct TomlLinear {
 #[derive(Debug, Deserialize, Default)]
 struct TomlLark {
     webhook_url: Option<String>,
+    github_webhook_url: Option<String>,
     app_id: Option<String>,
     app_secret: Option<String>,
     verification_token: Option<String>,
@@ -171,12 +258,21 @@ struct TomlServer {
     debounce_delay_ms: Option<u64>,
 }
 
+#[derive(Debug, Deserialize, Default)]
+struct TomlGitHub {
+    webhook_secret: Option<String>,
+    user_map: Option<HashMap<String, String>>,
+    alert_labels: Option<Vec<String>>,
+    repo_whitelist: Option<Vec<String>>,
+}
+
 impl AppState {
     pub fn from_env() -> Self {
         Self::from_parts(
             LinearConfig::from_env().expect("invalid linear config"),
             LarkConfig::from_env().expect("invalid lark config"),
             ServerConfig::from_env().expect("invalid server config"),
+            GitHubConfig::from_env(),
         )
     }
 
@@ -214,6 +310,9 @@ impl AppState {
         if let Some(s) = parsed.lark.webhook_url {
             lark.webhook_url = s;
         }
+        if let Some(s) = parsed.lark.github_webhook_url {
+            lark.github_webhook_url = s;
+        }
         if parsed.lark.app_id.is_some() {
             lark.app_id = parsed.lark.app_id;
         }
@@ -235,10 +334,41 @@ impl AppState {
             server.debounce_delay_ms = d;
         }
 
-        Ok(Self::from_parts(linear, lark, server))
+        // GitHub: env baseline, overlaid by [linear-bridge.github]. Disabled
+        // (None) unless a webhook secret ends up set.
+        let tg = parsed.github;
+        let mut github = GitHubConfig::from_env();
+        if tg.webhook_secret.is_some()
+            || tg.user_map.is_some()
+            || tg.alert_labels.is_some()
+            || tg.repo_whitelist.is_some()
+        {
+            let mut g = github.take().unwrap_or_default();
+            if let Some(s) = tg.webhook_secret {
+                g.webhook_secret = s;
+            }
+            if let Some(m) = tg.user_map {
+                g.user_map = m;
+            }
+            if let Some(l) = tg.alert_labels {
+                g.alert_labels = l.iter().map(|s| s.trim().to_lowercase()).collect();
+            }
+            if let Some(w) = tg.repo_whitelist {
+                g.repo_whitelist = w;
+            }
+            github = Some(g);
+        }
+        let github = github.filter(|g| !g.webhook_secret.is_empty());
+
+        Ok(Self::from_parts(linear, lark, server, github))
     }
 
-    fn from_parts(linear: LinearConfig, lark: LarkConfig, server: ServerConfig) -> Self {
+    fn from_parts(
+        linear: LinearConfig,
+        lark: LarkConfig,
+        server: ServerConfig,
+        github: Option<GitHubConfig>,
+    ) -> Self {
         let http = Client::new();
         let lark_bot = lark.bot_client(&http);
         let linear_client = linear.graphql_client(&http);
@@ -246,12 +376,19 @@ impl AppState {
         if lark.verification_token.is_some() {
             info!("LARK_VERIFICATION_TOKEN set – event verification enabled");
         }
+        if let Some(gh) = &github {
+            info!("GITHUB_WEBHOOK_SECRET set – GitHub webhook source enabled");
+            if !gh.repo_whitelist.is_empty() {
+                info!("GitHub repo whitelist: {:?}", gh.repo_whitelist);
+            }
+        }
         info!("debounce delay: {}ms", server.debounce_delay_ms);
 
         Self {
             linear,
             lark,
             server,
+            github,
             http,
             lark_bot,
             linear_client,
