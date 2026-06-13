@@ -1,0 +1,31 @@
+[package]
+name = "larkstack"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "larkstack framework host — supervises pluggable Apps and serves the admin console"
+
+[dependencies]
+axum = { workspace = true, features = ["tokio", "http1", "json", "macros", "query"] }
+tokio = { workspace = true, features = [
+    "rt-multi-thread",
+    "macros",
+    "time",
+    "signal",
+    "sync",
+    "net",
+] }
+tokio-stream = { version = "0.1", features = ["sync"] }
+tokio-util = "0.7"
+futures-util = { version = "0.3", default-features = false, features = ["std"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+anyhow = { workspace = true }
+mime_guess = "2"
+rust-embed = { version = "8", features = ["debug-embed"] }
+toml = "0.9"
+subtle = "2"
+larkstack-core = { path = "../larkstack-core" }

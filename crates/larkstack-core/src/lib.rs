@@ -244,6 +244,14 @@ impl ControlHandle {
         self.set_status(Status::new(State::Running, None)).await;
     }
 
+    pub async fn starting(&self) {
+        self.set_status(Status::new(State::Starting, None)).await;
+    }
+
+    pub async fn stopped(&self) {
+        self.set_status(Status::new(State::Stopped, None)).await;
+    }
+
     pub async fn errored(&self, msg: impl Into<String>) {
         self.set_status(Status::new(State::Errored, Some(msg.into())))
             .await;

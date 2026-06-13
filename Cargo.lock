@@ -414,22 +414,11 @@ name = "console"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "axum",
- "futures-util",
- "larkstack-core",
+ "larkstack",
  "linear-bridge",
  "meeting-digest",
- "mime_guess",
- "rust-embed",
- "serde",
- "serde_json",
  "standup-bot",
- "subtle",
  "tokio",
- "tokio-stream",
- "toml",
- "tracing",
- "tracing-subscriber",
 ]
 
 [[package]]
@@ -1095,6 +1084,27 @@ dependencies = [
  "tokio-tungstenite",
  "tracing",
  "url",
+]
+
+[[package]]
+name = "larkstack"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "futures-util",
+ "larkstack-core",
+ "mime_guess",
+ "rust-embed",
+ "serde",
+ "serde_json",
+ "subtle",
+ "tokio",
+ "tokio-stream",
+ "tokio-util",
+ "toml",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
