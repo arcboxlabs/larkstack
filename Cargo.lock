@@ -464,11 +464,13 @@ name = "console"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "github",
  "larkstack",
- "linear-bridge",
+ "linear",
  "meeting-digest",
  "standup-bot",
  "tokio",
+ "x",
 ]
 
 [[package]]
@@ -761,6 +763,30 @@ dependencies = [
  "r-efi 6.0.0",
  "wasip2",
  "wasip3",
+]
+
+[[package]]
+name = "github"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "axum",
+ "figment",
+ "hex",
+ "hmac",
+ "lark-kit",
+ "larkstack-core",
+ "octocrab",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tokio",
+ "tokio-util",
+ "toml",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -1159,6 +1185,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "lark-kit"
+version = "0.1.0"
+dependencies = [
+ "aes",
+ "anyhow",
+ "axum",
+ "base64",
+ "cbc",
+ "figment",
+ "hex",
+ "hmac",
+ "larkoapi 0.5.0",
+ "larkstack-core",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tokio",
+ "tokio-util",
+ "tracing",
+]
+
+[[package]]
 name = "larkoapi"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1277,25 +1326,18 @@ dependencies = [
 ]
 
 [[package]]
-name = "linear-bridge"
+name = "linear"
 version = "0.1.0"
 dependencies = [
- "aes",
  "anyhow",
  "async-trait",
  "axum",
- "base64",
- "cbc",
  "figment",
- "hex",
- "hmac",
- "larkoapi 0.5.0",
+ "lark-kit",
  "larkstack-core",
- "octocrab",
  "reqwest",
  "serde",
  "serde_json",
- "sha2",
  "tokio",
  "tokio-util",
  "toml",
@@ -3329,6 +3371,26 @@ name = "writeable"
 version = "0.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1ffae5123b2d3fc086436f8834ae3ab053a283cfac8fe0a0b8eaae044768a4c4"
+
+[[package]]
+name = "x"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "axum",
+ "figment",
+ "lark-kit",
+ "larkstack-core",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tokio-util",
+ "toml",
+ "tracing",
+ "tracing-subscriber",
+]
 
 [[package]]
 name = "yansi"

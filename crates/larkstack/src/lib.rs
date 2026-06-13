@@ -45,8 +45,10 @@ const DEFAULT_CONFIG: &str = r#"# larkstack console config
 #
 # Each app owns a top-level section. `enabled` (default false) toggles whether
 # the host runs it — flip it from the console. Values left empty fall back to
-# the matching environment variable (LINEAR_*, LARK_*, STT_*, DIGEST_*,
-# STANDUP_*, PORT, DEBOUNCE_DELAY_MS), so secrets can stay in the environment.
+# the matching environment variable (LINEAR_*, LARK_*, GITHUB_*, X_BEARER_TOKEN,
+# STT_*, DIGEST_*, STANDUP_*), so secrets can stay in the environment.
+#
+# Each inbound integration runs its own HTTP server — give them distinct ports.
 #
 # Lark credentials live in a shared registry. Register them here, or onboard
 # them from the console's "Lark Apps" tab (which live-tests them). An app then
@@ -58,29 +60,41 @@ const DEFAULT_CONFIG: &str = r#"# larkstack console config
 # app_secret = "..."
 # base_url = "https://open.larksuite.com"
 
-[linear-bridge]
+[linear]
 enabled = false
-# lark_app = "main"   # bind to [lark-apps.main]; or set credentials inline below
-[linear-bridge.linear]
-# webhook_secret = ""
-# api_key = ""
-[linear-bridge.lark]
+# lark_app = "main"            # bind to [lark-apps.main]; or set app_id/secret in [linear.lark]
+# webhook_secret = ""          # Linear webhook `linear-signature` HMAC secret
+# api_key = ""                 # Linear GraphQL key — enables issue link previews
+[linear.lark]
 # webhook_url = ""
-# github_webhook_url = ""   # GitHub notices group chat; falls back to webhook_url
-# app_id = ""
-# app_secret = ""
-# verification_token = ""      # Linear link-preview app's event-callback token
-# x_verification_token = ""    # X link-preview app (separate Lark app) token
-# x_encrypt_key = ""           # X app Encrypt Key; decrypts AES-256-CBC callbacks
+# verification_token = ""      # token for the Linear link-preview app (POST /lark/event)
 # base_url = "https://open.larksuite.com"
-[linear-bridge.server]
-# port = 3000
+[linear.server]
+port = 3000
 # debounce_delay_ms = 5000
-[linear-bridge.github]
-# webhook_secret = ""        # enables POST /github/webhook (HMAC-verified); unset = off
+
+[github]
+enabled = false
+# lark_app = "main"
+# webhook_secret = ""          # enables POST /github/webhook (HMAC-verified); unset = won't start
 # user_map = { octocat = "octo@example.com" }  # GitHub login → Lark email, for review DMs
 # alert_labels = ["bug", "urgent", "p0"]       # issue labels that post an alert card
 # repo_whitelist = ["repo-a", "repo-b"]        # empty = accept all repos
+[github.lark]
+# webhook_url = ""
+# base_url = "https://open.larksuite.com"
+[github.server]
+port = 3001
+
+[x]
+enabled = false
+# lark_app = "main"
+[x.lark]
+# verification_token = ""      # token for the X link-preview app (POST /lark/event)
+# encrypt_key = ""             # X app Encrypt Key; decrypts AES-256-CBC callbacks
+# base_url = "https://open.larksuite.com"
+[x.server]
+port = 3002
 
 [meeting-digest]
 enabled = false

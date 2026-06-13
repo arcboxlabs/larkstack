@@ -8,17 +8,22 @@ Guidance for coding agents working in this repository.
 
 Framework crates (`crates/`):
 
-- **crates/larkstack-core** — The plug-in contract + control plane. `App` (`manifest()` + `build(config) -> Arc<dyn Instance>`) and `Instance` (`run(cancel)` + `handle_action(action, params)`); `Manifest`/`ActionSpec`/`Kind`; the `LarkApp`/`LarkRegistry` credential registry (`[lark-apps.<name>]`); plus `ControlPlane`/`ControlHandle`/`Status`/`Event`/`EventStore` and the tracing→event `ControlLayer`. Apps depend only on this crate.
+- **crates/larkstack-core** — The plug-in contract + control plane. `App` (`manifest()` + `build(config) -> Arc<dyn Instance>`) and `Instance` (`run(cancel)` + `handle_action(action, params)`); `Manifest`/`ActionSpec`/`Kind`; the `LarkApp`/`LarkRegistry` credential registry (`[lark-apps.<name>]`); plus `ControlPlane`/`ControlHandle`/`Status`/`Event`/`EventStore` and the tracing→event `ControlLayer`. Apps depend only on this crate (plus `lark-kit` for the Lark integrations).
 - **crates/larkstack** — The host (lib). `Larkstack::new().register(app).run()`: a per-app supervisor state machine, the axum admin API + SSE + embedded React UI, the SQLite event store, config load + live reload, graceful shutdown. Depends only on `larkstack-core` (never on apps).
-- **crates/console** — Thin binary `larkstack-console` (~10 lines): registers the bundled apps and runs the host. One process, one deploy.
+- **crates/console** — Thin binary `larkstack-console` (~12 lines): registers the bundled apps and runs the host. One process, one deploy.
+- **crates/lark-kit** — Shared toolkit for the Lark **Integration** apps (not the framework). Source-agnostic: the Lark card builders (`card::{card, message, md_div, link_button}`), the group-webhook sender + DM bot, the inbound axum `server::serve`, the per-app `LarkConfig`/`ServerConfig` (+ `[lark-apps]` resolution helpers), the event-callback scaffold (`event::classify`: AES-256-CBC decrypt, challenge, token check, `url.preview.get` → `Callback`), and `verify_hmac_sha256`/`truncate`.
 
 Apps (`apps/`):
 
-- **apps/integrations/linear-bridge** (Integration) — Linear webhook → Lark notification bridge. Three-layer pipeline: `sources/` receive webhooks and normalize to a unified `Event`, `sinks/` format and deliver, middle layer (`debounce`, `dispatch`) operates on `Event` only.
+- **apps/integrations/linear** (Integration) — Linear webhook → Lark notifications + issue link previews. `POST /webhook` (debounced issue/comment cards), `POST /lark/event` (preview).
+- **apps/integrations/github** (Integration) — GitHub webhook → Lark notifications. `POST /github/webhook`; octocrab native models; PR/issue/CI/security-alert cards + review-request DMs.
+- **apps/integrations/x** (Integration) — X (Twitter) link previews. `POST /lark/event`; fetches tweet data (`XClient`) and replies with a preview card. Preview-only — no notifications.
 - **apps/automations/meeting-digest** (Automation) — Auto-transcribe Lark/Feishu recorded meetings and post digest cards. STT via `whisper-api` or `whisper-cpp` (feature flag). Uses `larkoapi` for all Lark API surface.
 - **apps/automations/standup-bot** (Automation) — Daily standup reminder bot. Scheduler + on-demand actions. Uses `larkoapi` over a WebSocket long connection.
 
-Single workspace `Cargo.lock` at the root; members are `["crates/*", "apps/*/*"]`. Each app keeps its own `[[bin]]` so it can still run standalone (`cargo run -p linear-bridge`) via its `run()` + env-var config, but the deployed artifact is `larkstack-console`.
+The three integrations each own their source + cards and share `lark-kit`; there is **no** cross-app `Event` enum. Each runs its own inbound HTTP server, so the console config gives them distinct ports (`[linear.server] 3000`, `[github.server] 3001`, `[x.server] 3002`).
+
+Single workspace `Cargo.lock` at the root; members are `["crates/*", "apps/*/*"]`. Each app keeps its own `[[bin]]` so it can still run standalone (`cargo run -p linear`) via its `run()` + env-var config, but the deployed artifact is `larkstack-console`.
 
 ### The App contract
 
@@ -58,7 +63,9 @@ cargo fmt --all -- --check                                  # format
 cargo clippy --workspace --all-targets -- -D warnings       # lint
 cargo test --workspace
 cargo build -p console --release                            # umbrella binary -> target/release/larkstack-console
-cargo build -p linear-bridge --release                      # standalone app bin
+cargo build -p linear --release                             # standalone app bins
+cargo build -p github --release
+cargo build -p x --release
 cargo build -p meeting-digest --release
 cargo build -p standup-bot --release
 
@@ -89,24 +96,19 @@ Container: workspace-root `Dockerfile` (node → rust → debian:slim); `docker-
 
 ## crates/console
 
-Thin binary: `Larkstack::new().register(linear_bridge::app()).register(meeting_digest::app()).register(standup_bot::app()).run().await`. Adding an app = one `.register(...)` + a crate dep.
+Thin binary: `Larkstack::new().register(linear::app()).register(github::app()).register(x::app()).register(meeting_digest::app()).register(standup_bot::app()).run().await`. Adding an app = one `.register(...)` + a crate dep.
 
-## apps/integrations/linear-bridge
+## apps/integrations/{linear, github, x} + crates/lark-kit
 
-A Linear + GitHub + X → Lark bridge: sources normalize into one `Event` model (or, for X, an on-demand preview), one Lark sink renders cards.
+Each integration is its own App crate (own source + cards + `AppState` + `[[bin]]`), all building on **`crates/lark-kit`** (the Lark sink/server/config/crypto toolkit; see *Architecture*). They share no `Event` enum — each builds cards directly from its source models and posts via `lark_kit::send_lark_card`. Every app's `from_toml` reads its `[<app>]` section, resolves an optional `lark_app = "<name>"` against `[lark-apps]` (via `LarkConfig::apply_lark_app`), then overlays `[<app>.lark]`. Each `run::serve` builds an axum router and hands it to `lark_kit::server::serve`.
 
-- `src/sources/linear/` — Webhook handler (HMAC-SHA256 verification), GraphQL client for link previews
-- `src/sources/github/` — `POST /github/webhook`: `X-Hub-Signature-256` HMAC verify, repo whitelist, octocrab (`default-features = false`, native webhook models) → `Event`; dispatches immediately (no debounce). Handles PR opened / review-requested / merged, alert-labeled issues, failed CI runs, secret-scanning + critical/high Dependabot alerts
-- `src/sources/x/` — `XClient` fetches tweet data (fxtwitter → X API v2 → oEmbed) for link previews. Unlike the others it produces a preview card on demand, **not** an `Event`
-- `src/sinks/lark/` — Bot client + card types re-exported from `larkoapi`, webhook sender, interactive cards. `event_handler` serves `POST /lark/event`: AES-256-CBC decrypt (X app Encrypt Key), dual verification-token check, and `url.preview.get` unfurling for Linear issues + X posts
-- `src/event.rs` — Unified `Event` enum: Linear (`IssueCreated`/`Updated`, `CommentCreated`) + GitHub (`PrOpened`, `PrReviewRequested`, `PrMerged`, `IssueLabeledAlert`, `WorkflowRunFailed`, `SecretScanningAlert`, `DependabotAlert`); `Priority` normalization
-- `src/utils.rs` — `verify_hmac_sha256` (shared by the Linear + GitHub sources) + `truncate`
-- `src/debounce.rs` — In-memory debounce (tokio tasks + oneshot cancel); Linear issues only
-- `src/dispatch.rs` — `dispatch` (Linear) / `dispatch_github` route an event to the Lark group webhook + optional DM; GitHub uses `lark.github_webhook_url` (falls back to `webhook_url`)
-- `src/config.rs` — `figment` + env vars prefixed `LINEAR_`, `LARK_`, `GITHUB_` (+ `X_BEARER_TOKEN`); `GitHubConfig` present only when a webhook secret is set; `AppState::from_toml(full_toml)`
-- `src/app.rs` — `App`/`Instance` impl; `run::serve(cancel)` binds the webhook server, `actions::handle(...)` runs `ping`/`test-lark`
+**linear** (`apps/integrations/linear`): `POST /webhook` (HMAC `linear-signature`) → `source/` normalizes to `model::IssueNotification` → `debounce` (issues) → `cards::issue_card`/`comment_card` → group webhook + assignee DM. `POST /lark/event` → `event_handler` (via `lark_kit::event::classify`) → Linear GraphQL fetch → `cards::preview_card`. Env: `LINEAR_*`, `LARK_*`; `[linear.server]` adds `debounce_delay_ms`.
 
-Routes (the app's own axum server on its configured port): `POST /webhook`, `POST /github/webhook`, `POST /lark/event`, `GET /health`. A `Dockerfile` lives inside this crate for standalone Railway deploys.
+**github** (`apps/integrations/github`): `POST /github/webhook` (`X-Hub-Signature-256`, repo whitelist) → octocrab native `WebhookEvent` → `cards::*` (PR opened/review-requested/merged, alert-labeled issues, failed CI, secret-scanning, critical/high Dependabot) → group webhook + review-request DM (`user_map`: GitHub login → Lark email). `build()` errors if `webhook_secret` is empty. Env: `GITHUB_*`, `LARK_*`.
+
+**x** (`apps/integrations/x`): `POST /lark/event` (`lark_kit::event::classify` handles decrypt/token) → `source::XClient` fetches the tweet (fxtwitter → X API v2 → oEmbed; `X_BEARER_TOKEN` optional) → `cards::x_preview`. Preview-only, no notifications.
+
+Each runs its own axum server on its `[<app>.server].port` (defaults: linear 3000, github 3001, x 3002).
 
 ## apps/automations/meeting-digest
 

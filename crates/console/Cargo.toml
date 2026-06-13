@@ -14,6 +14,8 @@ path = "src/main.rs"
 anyhow = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
 larkstack = { path = "../larkstack" }
-linear-bridge = { path = "../../apps/integrations/linear-bridge" }
+linear = { path = "../../apps/integrations/linear" }
+github = { path = "../../apps/integrations/github" }
+x = { path = "../../apps/integrations/x" }
 meeting-digest = { path = "../../apps/automations/meeting-digest" }
 standup-bot = { path = "../../apps/automations/standup-bot" }

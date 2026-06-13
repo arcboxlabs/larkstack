@@ -15,10 +15,15 @@ interface Action {
 }
 
 const CATALOG: Record<string, Action[]> = {
-  "linear-bridge": [
+  linear: [
     { name: "ping", description: "Emit a pong log event (smoke test the action plumbing)" },
     { name: "test-lark", description: "Post a test message to the configured Lark webhook" },
   ],
+  github: [
+    { name: "ping", description: "Emit a pong log event (smoke test the action plumbing)" },
+    { name: "test-lark", description: "Post a test message to the configured Lark webhook" },
+  ],
+  x: [{ name: "ping", description: "Emit a pong log event (smoke test the action plumbing)" }],
   "standup-bot": [
     { name: "announce", description: "Ensure tomorrow's doc and post the announcement card",
       params: [{ name: "date", label: "date (today | tomorrow | YYYY-MM-DD)", placeholder: "tomorrow" }] },
