@@ -18,10 +18,14 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::{RwLock, broadcast, mpsc, watch};
 
 pub mod app;
+mod metrics;
+mod state;
 mod store;
 mod tracing_layer;
 
 pub use app::{ActionSpec, App, Instance, Kind, Manifest};
+pub use metrics::{Metric, MetricsSink, SqliteMetricsSink};
+pub use state::{SqliteStateStore, StateStore};
 pub use store::EventStore;
 pub use tracing_layer::ControlLayer;
 
