@@ -36,6 +36,7 @@ use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 
 mod assets;
+mod lark_apps;
 mod supervisor;
 
 const BACKFILL_LIMIT: usize = 200;
@@ -46,9 +47,20 @@ const DEFAULT_CONFIG: &str = r#"# larkstack console config
 # the host runs it — flip it from the console. Values left empty fall back to
 # the matching environment variable (LINEAR_*, LARK_*, STT_*, DIGEST_*,
 # STANDUP_*, PORT, DEBOUNCE_DELAY_MS), so secrets can stay in the environment.
+#
+# Lark credentials live in a shared registry. Register them here, or onboard
+# them from the console's "Lark Apps" tab (which live-tests them). An app then
+# binds to one by name with `lark_app = "<name>"` instead of repeating
+# app_id/app_secret inline.
+#
+# [lark-apps.main]
+# app_id = "cli_..."
+# app_secret = "..."
+# base_url = "https://open.larksuite.com"
 
 [linear-bridge]
 enabled = false
+# lark_app = "main"   # bind to [lark-apps.main]; or set credentials inline below
 [linear-bridge.linear]
 # webhook_secret = ""
 # api_key = ""
@@ -64,6 +76,7 @@ enabled = false
 
 [meeting-digest]
 enabled = false
+# lark_app = "main"
 [meeting-digest.lark]
 # app_id = ""
 # app_secret = ""
@@ -84,6 +97,7 @@ enabled = false
 
 [standup-bot]
 enabled = false
+# lark_app = "main"
 [standup-bot.lark]
 # app_id = ""
 # app_secret = ""
@@ -147,6 +161,7 @@ impl Larkstack {
             store: store.clone(),
             config_path: config_path.clone(),
             manifests: Arc::new(manifests),
+            http: reqwest::Client::new(),
         };
 
         let token = std::env::var("CONSOLE_TOKEN").ok().map(Arc::new);
@@ -166,6 +181,12 @@ impl Larkstack {
             .route("/apps", get(apps))
             .route("/events", get(events))
             .route("/config", get(get_config).put(put_config))
+            .route("/lark-apps", get(lark_apps::list).post(lark_apps::upsert))
+            .route("/lark-apps/test", axum::routing::post(lark_apps::test))
+            .route(
+                "/lark-apps/{name}",
+                axum::routing::delete(lark_apps::delete),
+            )
             .route(
                 "/actions/{app}/{action}",
                 axum::routing::post(dispatch_action),
@@ -201,6 +222,7 @@ struct HostState {
     store: EventStore,
     config_path: Arc<PathBuf>,
     manifests: Arc<Vec<Manifest>>,
+    http: reqwest::Client,
 }
 
 async fn shutdown_signal() {

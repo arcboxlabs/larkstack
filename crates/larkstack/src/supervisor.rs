@@ -2,8 +2,10 @@
 //!
 //! One task per registered App owns its full lifecycle: enable/disable via the
 //! `[name].enabled` config flag (default off), build, run + concurrent action
-//! dispatch, status reporting, and crash/backoff restart. Only a change to the
-//! App's own config section restarts it — editing one app never bounces another.
+//! dispatch, status reporting, and crash/backoff restart. An App restarts only
+//! when its [`ChangeKey`] changes — its own config section plus the
+//! `[lark-apps.<name>]` entry it references — so editing one App, or the shared
+//! Lark credentials it binds to, never bounces an unrelated App.
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -23,9 +25,9 @@ pub(crate) fn supervise(control: ControlPlane, app: Arc<dyn App>, services: AppS
         let mut backoff = Backoff::new();
         loop {
             let config = (*config_rx.borrow_and_update()).clone();
-            let section = section_value(&config, &name);
+            let key = ChangeKey::compute(&config, &name);
 
-            if !is_enabled(&section) {
+            if !key.enabled() {
                 handle.stopped().await;
                 if config_rx.changed().await.is_err() {
                     break;
@@ -49,7 +51,7 @@ pub(crate) fn supervise(control: ControlPlane, app: Arc<dyn App>, services: AppS
             handle.running().await;
 
             let action_rx = control.register_actions(&name).await;
-            match run_generation(instance, &name, action_rx, &mut config_rx, &section).await {
+            match run_generation(instance, &name, action_rx, &mut config_rx, &key).await {
                 Outcome::Shutdown => break,
                 Outcome::Restart => info!(app = %name, "config changed; restarting"),
                 Outcome::Crashed(msg) => {
@@ -81,7 +83,7 @@ async fn run_generation(
     name: &str,
     action_rx: mpsc::UnboundedReceiver<ActionEnvelope>,
     config_rx: &mut watch::Receiver<Arc<String>>,
-    section: &Option<toml::Value>,
+    key: &ChangeKey,
 ) -> Outcome {
     let cancel = CancellationToken::new();
     let action_task = tokio::spawn(action_loop(instance.clone(), action_rx, name.to_string()));
@@ -105,7 +107,7 @@ async fn run_generation(
                     break Outcome::Shutdown;
                 }
                 let current = (*config_rx.borrow()).clone();
-                if &section_value(&current, name) != section {
+                if ChangeKey::compute(&current, name) != *key {
                     break Outcome::Restart;
                 }
             }
@@ -135,20 +137,41 @@ async fn action_loop(
     }
 }
 
-/// Extract an app's top-level config section as a value for the enabled check
-/// and change detection.
-fn section_value(full_toml: &str, name: &str) -> Option<toml::Value> {
-    toml::from_str::<toml::Value>(full_toml)
-        .ok()
-        .and_then(|v| v.as_table().and_then(|t| t.get(name).cloned()))
+/// What a config change is diffed against for one App. Holds the App's own
+/// `[name]` section plus the `[lark-apps.<ref>]` entry it binds to, so the
+/// supervisor restarts the App when either changes — and only then.
+#[derive(Debug, PartialEq)]
+struct ChangeKey {
+    section: Option<toml::Value>,
+    lark_app: Option<toml::Value>,
 }
 
-fn is_enabled(section: &Option<toml::Value>) -> bool {
-    section
-        .as_ref()
-        .and_then(|s| s.get("enabled"))
-        .and_then(|e| e.as_bool())
-        .unwrap_or(false)
+impl ChangeKey {
+    fn compute(full_toml: &str, name: &str) -> Self {
+        let root = toml::from_str::<toml::Value>(full_toml).ok();
+        let section = root
+            .as_ref()
+            .and_then(|v| v.as_table())
+            .and_then(|t| t.get(name).cloned());
+        let lark_app = section
+            .as_ref()
+            .and_then(|s| s.get("lark_app"))
+            .and_then(|v| v.as_str())
+            .and_then(|reference| {
+                root.as_ref()
+                    .and_then(|v| v.get("lark-apps"))
+                    .and_then(|apps| apps.get(reference).cloned())
+            });
+        Self { section, lark_app }
+    }
+
+    fn enabled(&self) -> bool {
+        self.section
+            .as_ref()
+            .and_then(|s| s.get("enabled"))
+            .and_then(|e| e.as_bool())
+            .unwrap_or(false)
+    }
 }
 
 /// Sleep for `delay`, waking early on a config change. Returns `true` if the
@@ -180,5 +203,54 @@ impl Backoff {
         let delay = self.current;
         self.current = (self.current * 2).min(Duration::from_secs(60));
         delay
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ChangeKey;
+
+    const CFG: &str = r#"
+[lark-apps.main]
+app_id = "a"
+app_secret = "s"
+
+[lark-apps.other]
+app_id = "b"
+app_secret = "t"
+
+[standup-bot]
+enabled = true
+lark_app = "main"
+"#;
+
+    #[test]
+    fn enabled_reflects_section_flag() {
+        assert!(ChangeKey::compute(CFG, "standup-bot").enabled());
+        // A section that is absent (or has no `enabled`) is disabled.
+        assert!(!ChangeKey::compute(CFG, "meeting-digest").enabled());
+    }
+
+    #[test]
+    fn editing_the_referenced_lark_app_flips_the_key() {
+        let base = ChangeKey::compute(CFG, "standup-bot");
+        let edited = CFG.replace(r#"app_secret = "s""#, r#"app_secret = "rotated""#);
+        assert_ne!(ChangeKey::compute(&edited, "standup-bot"), base);
+    }
+
+    #[test]
+    fn editing_an_unreferenced_lark_app_leaves_the_key() {
+        // standup-bot binds to `main`, not `other` — touching `other` must not
+        // bounce it.
+        let base = ChangeKey::compute(CFG, "standup-bot");
+        let edited = CFG.replace(r#"app_secret = "t""#, r#"app_secret = "rotated""#);
+        assert_eq!(ChangeKey::compute(&edited, "standup-bot"), base);
+    }
+
+    #[test]
+    fn editing_own_section_flips_the_key() {
+        let base = ChangeKey::compute(CFG, "standup-bot");
+        let edited = CFG.replace("lark_app = \"main\"", "lark_app = \"other\"");
+        assert_ne!(ChangeKey::compute(&edited, "standup-bot"), base);
     }
 }

@@ -29,3 +29,5 @@ rust-embed = { version = "8", features = ["debug-embed"] }
 toml = "0.9"
 subtle = "2"
 larkstack-core = { path = "../larkstack-core" }
+reqwest = { workspace = true, features = ["rustls-tls", "json"] }
+toml_edit = "0.25.12"
