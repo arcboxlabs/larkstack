@@ -66,6 +66,7 @@ enabled = false
 # api_key = ""
 [linear-bridge.lark]
 # webhook_url = ""
+# github_webhook_url = ""   # GitHub notices group chat; falls back to webhook_url
 # app_id = ""
 # app_secret = ""
 # verification_token = ""
@@ -73,6 +74,11 @@ enabled = false
 [linear-bridge.server]
 # port = 3000
 # debounce_delay_ms = 5000
+[linear-bridge.github]
+# webhook_secret = ""        # enables POST /github/webhook (HMAC-verified); unset = off
+# user_map = { octocat = "octo@example.com" }  # GitHub login → Lark email, for review DMs
+# alert_labels = ["bug", "urgent", "p0"]       # issue labels that post an alert card
+# repo_whitelist = ["repo-a", "repo-b"]        # empty = accept all repos
 
 [meeting-digest]
 enabled = false

@@ -93,15 +93,19 @@ Thin binary: `Larkstack::new().register(linear_bridge::app()).register(meeting_d
 
 ## apps/integrations/linear-bridge
 
+A Linear **and** GitHub → Lark bridge: two sources normalize into one `Event` model, one Lark sink renders cards.
+
 - `src/sources/linear/` — Webhook handler (HMAC-SHA256 verification), GraphQL client for link previews
+- `src/sources/github/` — `POST /github/webhook`: `X-Hub-Signature-256` HMAC verify, repo whitelist, octocrab (`default-features = false`, native webhook models) → `Event`; dispatches immediately (no debounce). Handles PR opened / review-requested / merged, alert-labeled issues, failed CI runs, secret-scanning + critical/high Dependabot alerts
 - `src/sinks/lark/` — Bot client + card types re-exported from `larkoapi`, webhook sender, interactive cards, event handler
-- `src/event.rs` — Unified `Event` enum (`IssueCreated`/`Updated`, `CommentCreated`) with `Priority` normalization
-- `src/debounce.rs` — In-memory debounce (tokio tasks + oneshot cancel)
-- `src/dispatch.rs` — Routes events to all sinks
-- `src/config.rs` — `figment` + env vars prefixed `LINEAR_`, `LARK_`; `AppState::from_toml(full_toml)`
+- `src/event.rs` — Unified `Event` enum: Linear (`IssueCreated`/`Updated`, `CommentCreated`) + GitHub (`PrOpened`, `PrReviewRequested`, `PrMerged`, `IssueLabeledAlert`, `WorkflowRunFailed`, `SecretScanningAlert`, `DependabotAlert`); `Priority` normalization
+- `src/utils.rs` — `verify_hmac_sha256` (shared by both sources) + `truncate`
+- `src/debounce.rs` — In-memory debounce (tokio tasks + oneshot cancel); Linear issues only
+- `src/dispatch.rs` — `dispatch` (Linear) / `dispatch_github` route an event to the Lark group webhook + optional DM; GitHub uses `lark.github_webhook_url` (falls back to `webhook_url`)
+- `src/config.rs` — `figment` + env vars prefixed `LINEAR_`, `LARK_`, `GITHUB_`; `GitHubConfig` present only when a webhook secret is set; `AppState::from_toml(full_toml)`
 - `src/app.rs` — `App`/`Instance` impl; `run::serve(cancel)` binds the webhook server, `actions::handle(...)` runs `ping`/`test-lark`
 
-Routes (the app's own axum server on its configured port): `POST /webhook`, `POST /lark/event`, `GET /health`. A `Dockerfile` lives inside this crate for standalone Railway deploys.
+Routes (the app's own axum server on its configured port): `POST /webhook`, `POST /github/webhook`, `POST /lark/event`, `GET /health`. A `Dockerfile` lives inside this crate for standalone Railway deploys.
 
 ## apps/automations/meeting-digest
 
