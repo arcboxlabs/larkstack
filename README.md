@@ -23,17 +23,18 @@
 
 | Crate | Purpose |
 | :--- | :--- |
-| `crates/console` | Umbrella binary `larkstack-console` — tokio supervisor + axum API + embedded React UI |
-| `crates/control` | Shared types (`ControlPlane`, `EventStore`, action dispatch) |
-| `crates/linear-bridge` | Linear webhook → Lark notifications. Standalone bin still works |
-| `crates/meeting-digest` | Auto-transcribe Lark VC recordings and post digest cards |
-| `crates/standup-bot` | Daily standup reminders + on-demand chat commands |
+| `crates/larkstack-core` | Plug-in contract (`App`/`Instance`/`Manifest`) + control plane (`ControlPlane`, `EventStore`) |
+| `crates/larkstack` | Framework host — per-app supervisor + axum API + embedded React UI |
+| `crates/console` | Thin binary `larkstack-console` — registers the bundled apps and runs the host |
+| `apps/integrations/linear-bridge` | Linear webhook → Lark notifications (Integration). Standalone bin still works |
+| `apps/automations/meeting-digest` | Auto-transcribe Lark VC recordings, post digest cards (Automation) |
+| `apps/automations/standup-bot` | Daily standup reminders + on-demand actions (Automation) |
 
 ## Console features
 
-- **Dashboard** — per-subsystem state + last-error.
+- **Dashboard** — per-app state + last-error.
 - **Live event stream** — every `tracing` event from every subsystem, SSE with `?since=` / `Last-Event-ID` backfill, persisted to SQLite (rolling 10k).
-- **Config editor** — TOML editor in the UI; saving triggers a hot restart of the affected subsystem.
+- **Config editor** — TOML editor in the UI; each app has an `enabled` toggle, and saving hot-restarts only the affected app.
 - **Actions** — one-shot triggers per subsystem (`linear-bridge: ping/test-lark`, `standup-bot: announce/ensure/remind/urgent/check`, `meeting-digest: process-meeting`).
 - **Auth** — `CONSOLE_TOKEN` env var protects `/api/*`.
 
@@ -41,7 +42,7 @@
 
 ```bash
 # 1. Build
-cd crates/console/web && npm ci && npm run build && cd ../../..
+cd crates/larkstack/web && npm ci && npm run build && cd ../../..
 cargo build -p console --release
 
 # 2. Run

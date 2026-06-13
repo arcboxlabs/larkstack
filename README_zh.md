@@ -21,17 +21,18 @@
 
 | Crate | 作用 |
 | :--- | :--- |
-| `crates/console` | umbrella binary `larkstack-console`——tokio 监管 + axum API + 内嵌 React UI |
-| `crates/control` | 共享类型（`ControlPlane`、`EventStore`、动作分发） |
-| `crates/linear-bridge` | Linear webhook → 飞书通知。仍可独立部署 |
-| `crates/meeting-digest` | 自动转写飞书 VC 录制并发送摘要卡片 |
-| `crates/standup-bot` | 每日站会提醒 + 群内命令 |
+| `crates/larkstack-core` | 插件契约（`App`/`Instance`/`Manifest`）+ 控制面（`ControlPlane`、`EventStore`） |
+| `crates/larkstack` | 框架宿主——按 app 监管 + axum API + 内嵌 React UI |
+| `crates/console` | 瘦二进制 `larkstack-console`——注册内置 apps 并运行宿主 |
+| `apps/integrations/linear-bridge` | Linear webhook → 飞书通知（Integration）。仍可独立部署 |
+| `apps/automations/meeting-digest` | 自动转写飞书 VC 录制并发送摘要卡片（Automation） |
+| `apps/automations/standup-bot` | 每日站会提醒 + 一次性动作（Automation） |
 
 ## 控制台特性
 
-- **状态面板**——每个子系统的运行状态 + 最近错误
+- **状态面板**——每个 app 的运行状态 + 最近错误
 - **实时事件流**——所有子系统的 `tracing` 事件，SSE 支持 `?since=` / `Last-Event-ID` 回放，持久化到 SQLite（滚动 1 万条）
-- **配置编辑**——UI 内 TOML 编辑器，保存即热重启对应子系统
+- **配置编辑**——UI 内 TOML 编辑器，每个 app 有 `enabled` 开关，保存只热重启受影响的 app
 - **动作触发**——每个子系统的一次性命令（`linear-bridge: ping/test-lark`、`standup-bot: announce/ensure/remind/urgent/check`、`meeting-digest: process-meeting`）
 - **认证**——`CONSOLE_TOKEN` 环境变量保护 `/api/*`
 
@@ -39,7 +40,7 @@
 
 ```bash
 # 1. 构建
-cd crates/console/web && npm ci && npm run build && cd ../../..
+cd crates/larkstack/web && npm ci && npm run build && cd ../../..
 cargo build -p console --release
 
 # 2. 运行

@@ -63,7 +63,7 @@ during shutdown.
 ## Bundling without Docker
 
 ```bash
-cd crates/console/web && npm ci && npm run build && cd -
+cd crates/larkstack/web && npm ci && npm run build && cd -
 cargo build -p console --release
 # binary at target/release/larkstack-console
 CONSOLE_TOKEN=$(openssl rand -hex 32) CONSOLE_DATA_DIR=./data \

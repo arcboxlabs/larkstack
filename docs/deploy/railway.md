@@ -1,11 +1,11 @@
 # Deploy to Railway / Docker
 
-The `Dockerfile` lives in `crates/linear-bridge/` for [Railway](https://railway.app/).
+The `Dockerfile` lives in `apps/integrations/linear-bridge/` for [Railway](https://railway.app/).
 
 ## Steps
 
 1. Create a new project on Railway and connect this repository.
-2. In the Railway service settings, set **Root Directory** to `crates/linear-bridge`
+2. In the Railway service settings, set **Root Directory** to `apps/integrations/linear-bridge`
    so the Dockerfile and build context resolve correctly.
 3. Add environment variables in the Railway dashboard — see
    [Configuration](../getting-started/configuration.md) for the full list.
@@ -19,7 +19,7 @@ The `Dockerfile` lives in `crates/linear-bridge/` for [Railway](https://railway.
 ## Manual Docker build
 
 ```bash
-docker build -t linear-bridge crates/linear-bridge
+docker build -t linear-bridge apps/integrations/linear-bridge
 docker run -p 3000:3000 \
   -e LINEAR_WEBHOOK_SECRET=your_secret \
   -e LARK_WEBHOOK_URL=https://open.larksuite.com/open-apis/bot/v2/hook/xxx \

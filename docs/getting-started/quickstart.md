@@ -10,7 +10,7 @@
 
 ```bash
 git clone https://github.com/accele-ai/larkstack.git
-cd larkstack/crates/linear-bridge
+cd larkstack/apps/integrations/linear-bridge
 export LINEAR_WEBHOOK_SECRET=your_secret
 export LARK_WEBHOOK_URL=https://open.larksuite.com/open-apis/bot/v2/hook/xxx
 cargo run

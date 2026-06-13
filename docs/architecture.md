@@ -8,7 +8,7 @@ no changes to the other layers.
 ## Source code layout
 
 ```
-crates/linear-bridge/src/
+apps/integrations/linear-bridge/src/
 ├── sources/
 │   └── linear/          # Linear webhook source
 │       ├── handler.rs   # POST /webhook — signature check, parse, normalize
