@@ -9,10 +9,11 @@
 # ---- stage 1: frontend ----------------------------------------------------
 FROM node:lts-slim AS web-builder
 WORKDIR /web
-COPY dashboard/package.json dashboard/package-lock.json ./
-RUN npm ci
+RUN corepack enable
+COPY dashboard/package.json dashboard/pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile
 COPY dashboard/ ./
-RUN npm run build
+RUN pnpm run build
 
 # ---- stage 2: rust release build ------------------------------------------
 FROM rust:slim AS rust-builder

@@ -45,7 +45,7 @@
 
 ```bash
 # 1. Build
-cd dashboard && npm ci && npm run build && cd ..
+cd dashboard && pnpm install --frozen-lockfile && pnpm build && cd ..
 cargo build -p console --release
 
 # 2. Run

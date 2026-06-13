@@ -38,12 +38,12 @@ An App is a registered descriptor (`fn app() -> Arc<dyn App>`) that builds a con
 
 **Lark-app registry.** Lark credentials live once under `[lark-apps.<name>] = { app_id, app_secret, base_url }`; an app binds to one with `lark_app = "<name>"` in its own section (resolved in each app's `from_toml`, before the inline `[<app>].lark` / env overlay, which still works for standalone bins). Onboard/manage entries from the console's **Lark Apps** tab, which live-tests the credentials (mints a `tenant_access_token`) before saving. Credentials are stored plaintext in `config.toml` (CONSOLE_TOKEN-gated); the registry GET redacts `app_secret`.
 
-**Frontend** lives in `dashboard/` at the repo root (React + Vite). `npm run build` emits to `dashboard/dist/`, which `rust-embed` bakes into the host at compile time (the host crate embeds `../../dashboard/dist/`). `crates/larkstack/build.rs` writes a stub `index.html` if the frontend isn't built yet so `cargo build` always succeeds.
+**Frontend** lives in `dashboard/` at the repo root (React + Vite, **pnpm**). `pnpm build` emits to `dashboard/dist/`, which `rust-embed` bakes into the host at compile time (the host crate embeds `../../dashboard/dist/`). `crates/larkstack/build.rs` writes a stub `index.html` if the frontend isn't built yet so `cargo build` always succeeds.
 
 ## Development Environment
 
 The repo uses **[devenv](https://devenv.sh)** (`devenv.nix` + `devenv.yaml`) with **direnv** for auto-activation.
-On entering the directory the dev shell auto-loads Rust stable (clippy, rustfmt, rust-analyzer) and `protoc` (required by the `larkoapi` build script).
+On entering the directory the dev shell auto-loads Rust stable (clippy, rustfmt, rust-analyzer), `protoc` (required by the `larkoapi` build script), and the frontend toolchain (Node.js + `pnpm`) for `dashboard/`.
 
 ```bash
 # Prereqs: Nix (flakes enabled), direnv, devenv (`nix profile install nixpkgs#devenv`)
@@ -70,7 +70,7 @@ cargo build -p meeting-digest --release
 cargo build -p standup-bot --release
 
 # Frontend (required before `cargo build -p console` for a non-stub UI)
-cd dashboard && npm install && npm run build
+cd dashboard && pnpm install && pnpm build
 ```
 
 ## crates/larkstack (host)
