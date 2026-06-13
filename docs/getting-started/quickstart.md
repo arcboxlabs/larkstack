@@ -10,13 +10,14 @@
 
 ```bash
 git clone https://github.com/accele-ai/larkstack.git
-cd larkstack/apps/integrations/linear-bridge
+cd larkstack
 export LINEAR_WEBHOOK_SECRET=your_secret
 export LARK_WEBHOOK_URL=https://open.larksuite.com/open-apis/bot/v2/hook/xxx
-cargo run
+cargo run -p linear
 ```
 
-The server starts on port 3000 by default.
+The `linear` app's webhook server starts on port 3000 by default. (For all apps
+behind one admin UI, run the console instead — see [Deploy](../deploy/console.md).)
 
 ## 2. Expose your local server
 

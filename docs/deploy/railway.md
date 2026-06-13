@@ -1,27 +1,33 @@
-# Deploy to Railway / Docker
+# Deploy the console to Railway / Docker
 
-The `Dockerfile` lives in `apps/integrations/linear-bridge/` for [Railway](https://railway.app/).
+The deploy artifact is the **console** — one binary that supervises every app,
+built from the workspace-root `Dockerfile`.
 
-## Steps
+## Railway
 
-1. Create a new project on Railway and connect this repository.
-2. In the Railway service settings, set **Root Directory** to `apps/integrations/linear-bridge`
-   so the Dockerfile and build context resolve correctly.
-3. Add environment variables in the Railway dashboard — see
-   [Configuration](../getting-started/configuration.md) for the full list.
-
-![Railway Variables](../images/railway-vars.png)
-
-4. Railway detects the `Dockerfile` and builds on push.
-5. Set the Linear webhook URL to `https://<your-app>.up.railway.app/webhook`.
-6. Set the Lark event callback URL to `https://<your-app>.up.railway.app/lark/event`.
+1. Create a new project on [Railway](https://railway.app/) and connect this repository.
+2. Leave **Root Directory** at the repo root so the workspace `Dockerfile` resolves.
+3. Add environment variables — at minimum `CONSOLE_TOKEN` (protects `/api/*`); see
+   [Configuration](../getting-started/configuration.md) for the full list. App
+   credentials can also be set from the console's Config / Lark Apps tabs.
+4. Railway detects the `Dockerfile` and builds on push. The admin UI + API serve on `$CONSOLE_PORT` (default `8080`).
+5. Enable the apps you want from the UI; each inbound integration serves its webhook on its
+   own port (`[linear.server] 3000`, `[github.server] 3001`, `[x.server] 3002`) — expose the
+   ones you need and point Linear/GitHub/Lark at the matching public URL
+   (`/webhook`, `/github/webhook`, `/lark/event`).
 
 ## Manual Docker build
 
 ```bash
-docker build -t linear-bridge apps/integrations/linear-bridge
-docker run -p 3000:3000 \
-  -e LINEAR_WEBHOOK_SECRET=your_secret \
-  -e LARK_WEBHOOK_URL=https://open.larksuite.com/open-apis/bot/v2/hook/xxx \
-  linear-bridge
+docker build -t larkstack-console .
+docker run -p 8080:8080 -p 3000:3000 \
+  -e CONSOLE_TOKEN=$(openssl rand -hex 32) \
+  -v larkstack-data:/data \
+  larkstack-console
 ```
+
+`docker compose up -d` does the same via [`docker-compose.yml`](../../docker-compose.yml).
+
+> Need just one integration? Each app keeps a `[[bin]]` (`cargo run -p github`) and
+> reads `GITHUB_*` / `LARK_*` from the environment — package it yourself if you want a
+> single-purpose image.

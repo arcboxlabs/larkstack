@@ -6,7 +6,10 @@ services:
     restart: unless-stopped
     ports:
       - "8080:8080" # admin UI + API
-      - "3000:3000" # linear-bridge webhook receiver (optional, omit if you don't expose it)
+      # Inbound integration webhooks — expose only the ones you enable:
+      - "3000:3000" # linear
+      - "3001:3001" # github
+      - "3002:3002" # x
     environment:
       # Required: random secret protecting /api/*. Leave unset for local-only dev.
       # CONSOLE_TOKEN: replace-me

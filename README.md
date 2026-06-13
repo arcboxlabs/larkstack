@@ -26,7 +26,10 @@
 | `crates/larkstack-core` | Plug-in contract (`App`/`Instance`/`Manifest`) + control plane (`ControlPlane`, `EventStore`) |
 | `crates/larkstack` | Framework host — per-app supervisor + axum API + embedded React UI |
 | `crates/console` | Thin binary `larkstack-console` — registers the bundled apps and runs the host |
-| `apps/integrations/linear-bridge` | Linear webhook → Lark notifications (Integration). Standalone bin still works |
+| `crates/lark-kit` | Shared toolkit for the Lark integration apps (sink, inbound server, config, crypto) |
+| `apps/integrations/linear` | Linear webhook → Lark notifications + issue link previews (Integration) |
+| `apps/integrations/github` | GitHub webhook → Lark notifications (Integration) |
+| `apps/integrations/x` | X (Twitter) link previews in Lark (Integration) |
 | `apps/automations/meeting-digest` | Auto-transcribe Lark VC recordings, post digest cards (Automation) |
 | `apps/automations/standup-bot` | Daily standup reminders + on-demand actions (Automation) |
 
@@ -35,7 +38,7 @@
 - **Dashboard** — per-app state + last-error.
 - **Live event stream** — every `tracing` event from every subsystem, SSE with `?since=` / `Last-Event-ID` backfill, persisted to SQLite (rolling 10k).
 - **Config editor** — TOML editor in the UI; each app has an `enabled` toggle, and saving hot-restarts only the affected app.
-- **Actions** — one-shot triggers per subsystem (`linear-bridge: ping/test-lark`, `standup-bot: announce/ensure/remind/urgent/check`, `meeting-digest: process-meeting`).
+- **Actions** — one-shot triggers per subsystem (`linear`/`github`: ping/test-lark, `x`: ping, `standup-bot: announce/ensure/remind/urgent/check`, `meeting-digest: process-meeting`).
 - **Auth** — `CONSOLE_TOKEN` env var protects `/api/*`.
 
 ## Quick start
@@ -50,7 +53,7 @@ CONSOLE_TOKEN=$(openssl rand -hex 32) \
 LINEAR_WEBHOOK_SECRET=your_secret \
 LARK_WEBHOOK_URL=https://open.larksuite.com/open-apis/bot/v2/hook/xxx \
 ./target/release/larkstack-console
-# UI on http://localhost:8080, linear-bridge webhook on http://localhost:3000
+# UI on http://localhost:8080; linear/github/x webhooks on :3000/:3001/:3002
 ```
 
 Or with Docker:
@@ -61,13 +64,15 @@ docker compose up -d
 
 See [docs/deploy/console.md](./docs/deploy/console.md) for the full env-var reference.
 
-## Standalone subsystems
+## Standalone apps
 
-If you only need one piece, each crate keeps its `[[bin]]` and can be deployed alone:
+Each app keeps its own `[[bin]]` for local use or a single-purpose deploy, reading config from env vars (`LINEAR_*`, `LARK_*`, `GITHUB_*`, …):
 
-| Target | Guide |
-| :--- | :--- |
-| linear-bridge → Railway/Docker | [docs/deploy/railway.md](./docs/deploy/railway.md) |
+```bash
+cargo run -p linear      # or github / x / meeting-digest / standup-bot
+```
+
+For production, deploy the **console** — one binary, all apps, toggled from the UI. See [docs/deploy/console.md](./docs/deploy/console.md) and [docs/deploy/railway.md](./docs/deploy/railway.md).
 
 ## License
 

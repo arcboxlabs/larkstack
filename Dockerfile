@@ -36,8 +36,8 @@ ENV CONSOLE_PORT=8080
 # Persist SQLite event log + config.toml between restarts.
 VOLUME ["/data"]
 EXPOSE 8080
-# linear-bridge HTTP listener (configurable via [linear-bridge.server.port]).
-EXPOSE 3000
+# Inbound integration webhook listeners (linear/github/x — see [<app>.server].port).
+EXPOSE 3000 3001 3002
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
     CMD ["sh", "-c", "wget -q --spider http://127.0.0.1:${CONSOLE_PORT}/api/health || exit 1"]
 CMD ["larkstack-console"]

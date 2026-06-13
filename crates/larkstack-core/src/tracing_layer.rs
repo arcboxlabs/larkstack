@@ -12,8 +12,8 @@ use crate::{ControlPlane, Event};
 ///
 /// Subsystem is derived from the event's `target` (the module path Cargo
 /// generates from the crate name) by taking the first segment and replacing
-/// underscores with dashes — `linear_bridge::sources::handler` ->
-/// `linear-bridge`. Targets without a crate prefix get `None`.
+/// underscores with dashes — `meeting_digest::pipeline` -> `meeting-digest`.
+/// Targets without a crate prefix get `None`.
 pub struct ControlLayer {
     plane: ControlPlane,
 }

@@ -1,8 +1,8 @@
 # Deploy `larkstack-console`
 
-The console is a single binary that supervises `linear-bridge`,
-`meeting-digest`, and `standup-bot` and serves a React admin UI. One process,
-one deploy.
+The console is a single binary that supervises the bundled apps (`linear`,
+`github`, `x`, `meeting-digest`, `standup-bot`) and serves a React admin UI.
+One process, one deploy.
 
 ## Environment
 
@@ -82,8 +82,6 @@ will see the same lines that show up in the events tab.
 
 ## Standalone subsystems
 
-Each subsystem still has its own `[[bin]]` for standalone deployments
-(`cargo run -p linear-bridge`, etc.). Use those when you only need one
-piece. See the per-crate docs:
-
-- [linear-bridge → Railway](railway.md)
+Each app still has its own `[[bin]]` for standalone deployments
+(`cargo run -p linear`, `-p github`, `-p x`, …). Use those when you only need
+one piece. See [Deploy to Railway / Docker](railway.md).
