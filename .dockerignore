@@ -8,7 +8,7 @@ target/
 data/
 site/
 .zensical-cache/
-crates/console/web/node_modules/
-crates/console/web/dist/
-crates/console/web/*.tsbuildinfo
+dashboard/node_modules/
+dashboard/dist/
+dashboard/*.tsbuildinfo
 *.log

@@ -9,9 +9,9 @@
 # ---- stage 1: frontend ----------------------------------------------------
 FROM node:lts-slim AS web-builder
 WORKDIR /web
-COPY crates/console/web/package.json crates/console/web/package-lock.json ./
+COPY dashboard/package.json dashboard/package-lock.json ./
 RUN npm ci
-COPY crates/console/web/ ./
+COPY dashboard/ ./
 RUN npm run build
 
 # ---- stage 2: rust release build ------------------------------------------
@@ -22,7 +22,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /build
 COPY . .
-COPY --from=web-builder /web/dist crates/console/web/dist
+COPY --from=web-builder /web/dist dashboard/dist
 RUN cargo build -p console --release
 
 # ---- stage 3: runtime -----------------------------------------------------

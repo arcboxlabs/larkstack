@@ -63,15 +63,15 @@ during shutdown.
 ## Bundling without Docker
 
 ```bash
-cd crates/larkstack/web && npm ci && npm run build && cd -
+cd dashboard && npm ci && npm run build && cd -
 cargo build -p console --release
 # binary at target/release/larkstack-console
 CONSOLE_TOKEN=$(openssl rand -hex 32) CONSOLE_DATA_DIR=./data \
   ./target/release/larkstack-console
 ```
 
-`crates/console/build.rs` writes a placeholder `web/dist/index.html` if the
-frontend hasn't been built, so `cargo build -p console` always succeeds —
+`crates/larkstack/build.rs` writes a placeholder `dashboard/dist/index.html` if
+the frontend hasn't been built, so `cargo build -p console` always succeeds —
 the UI just shows a "build the frontend" hint until you run `npm run build`.
 
 ## Logs

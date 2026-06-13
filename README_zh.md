@@ -43,7 +43,7 @@
 
 ```bash
 # 1. 构建
-cd crates/larkstack/web && npm ci && npm run build && cd ../../..
+cd dashboard && npm ci && npm run build && cd ..
 cargo build -p console --release
 
 # 2. 运行

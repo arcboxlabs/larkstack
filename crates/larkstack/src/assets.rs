@@ -6,7 +6,7 @@ use axum::{
 use rust_embed::RustEmbed;
 
 #[derive(RustEmbed)]
-#[folder = "web/dist/"]
+#[folder = "../../dashboard/dist/"]
 struct Assets;
 
 pub async fn serve(uri: Uri) -> Response {

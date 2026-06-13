@@ -38,7 +38,7 @@ An App is a registered descriptor (`fn app() -> Arc<dyn App>`) that builds a con
 
 **Lark-app registry.** Lark credentials live once under `[lark-apps.<name>] = { app_id, app_secret, base_url }`; an app binds to one with `lark_app = "<name>"` in its own section (resolved in each app's `from_toml`, before the inline `[<app>].lark` / env overlay, which still works for standalone bins). Onboard/manage entries from the console's **Lark Apps** tab, which live-tests the credentials (mints a `tenant_access_token`) before saving. Credentials are stored plaintext in `config.toml` (CONSOLE_TOKEN-gated); the registry GET redacts `app_secret`.
 
-**Frontend** lives in `crates/larkstack/web/` (React + Vite). `npm run build` emits to `crates/larkstack/web/dist/`, which `rust-embed` bakes into the host at compile time. `crates/larkstack/build.rs` writes a stub `index.html` if the frontend isn't built yet so `cargo build` always succeeds.
+**Frontend** lives in `dashboard/` at the repo root (React + Vite). `npm run build` emits to `dashboard/dist/`, which `rust-embed` bakes into the host at compile time (the host crate embeds `../../dashboard/dist/`). `crates/larkstack/build.rs` writes a stub `index.html` if the frontend isn't built yet so `cargo build` always succeeds.
 
 ## Development Environment
 
@@ -70,7 +70,7 @@ cargo build -p meeting-digest --release
 cargo build -p standup-bot --release
 
 # Frontend (required before `cargo build -p console` for a non-stub UI)
-cd crates/larkstack/web && npm install && npm run build
+cd dashboard && npm install && npm run build
 ```
 
 ## crates/larkstack (host)
