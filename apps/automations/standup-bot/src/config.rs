@@ -1,4 +1,5 @@
 use figment::{Figment, providers::Env};
+use larkstack_core::LarkRegistry;
 use serde::{Deserialize, Serialize};
 
 fn default_base_url() -> String {
@@ -72,11 +73,15 @@ impl AppConfig {
     pub fn from_toml(full_toml: &str) -> Result<Self, Box<figment::Error>> {
         #[derive(Default, Deserialize)]
         struct TopLevel {
+            #[serde(rename = "lark-apps", default)]
+            lark_apps: LarkRegistry,
             #[serde(rename = "standup-bot", default)]
             section: Section,
         }
         #[derive(Default, Deserialize)]
         struct Section {
+            /// Reference into `[lark-apps]`; resolved before the inline overlay.
+            lark_app: Option<String>,
             #[serde(default)]
             lark: TomlLark,
             #[serde(default)]
@@ -99,6 +104,17 @@ impl AppConfig {
             toml::from_str(full_toml).map_err(|e| Box::new(figment::Error::from(e.to_string())))?;
 
         let mut cfg = Self::from_env()?;
+
+        if let Some(name) = &top.section.lark_app {
+            let app = top.lark_apps.get(name).ok_or_else(|| {
+                Box::new(figment::Error::from(format!(
+                    "lark_app '{name}' not found in [lark-apps]"
+                )))
+            })?;
+            cfg.lark.app_id = app.app_id.clone();
+            cfg.lark.app_secret = app.app_secret.clone();
+            cfg.lark.base_url = app.base_url.clone();
+        }
 
         if let Some(v) = top.section.lark.app_id {
             cfg.lark.app_id = v;

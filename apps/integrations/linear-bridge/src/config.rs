@@ -1,4 +1,5 @@
 use figment::{Figment, providers::Env};
+use larkstack_core::LarkRegistry;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use tracing::info;
@@ -131,6 +132,8 @@ pub struct AppState {
 
 #[derive(Debug, Deserialize, Default)]
 struct TopLevelToml {
+    #[serde(rename = "lark-apps", default)]
+    lark_apps: LarkRegistry,
     #[serde(rename = "linear-bridge", default)]
     linear_bridge: TomlSection,
 }
@@ -139,6 +142,8 @@ struct TopLevelToml {
 struct TomlSection {
     #[serde(default)]
     linear: TomlLinear,
+    /// Reference into `[lark-apps]`; resolved before the inline overlay.
+    lark_app: Option<String>,
     #[serde(default)]
     lark: TomlLark,
     #[serde(default)]
@@ -196,6 +201,16 @@ impl AppState {
         }
 
         let mut lark = LarkConfig::from_env().unwrap_or_default();
+        if let Some(name) = &parsed.lark_app {
+            let app = top.lark_apps.get(name).ok_or_else(|| {
+                Box::new(figment::Error::from(format!(
+                    "lark_app '{name}' not found in [lark-apps]"
+                )))
+            })?;
+            lark.app_id = Some(app.app_id.clone());
+            lark.app_secret = Some(app.app_secret.clone());
+            lark.base_url = app.base_url.clone();
+        }
         if let Some(s) = parsed.lark.webhook_url {
             lark.webhook_url = s;
         }
