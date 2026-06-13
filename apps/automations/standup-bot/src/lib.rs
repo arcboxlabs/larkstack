@@ -15,7 +15,6 @@ pub mod run;
 pub mod scheduler;
 pub mod templates;
 
-pub use actions::handle_actions;
 pub use app::app;
 pub use config::{AppConfig, LarkConfig, StandupConfig};
 pub use run::{build_bot, run, run_with_bot};

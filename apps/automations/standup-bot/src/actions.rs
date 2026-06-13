@@ -4,11 +4,9 @@ use anyhow::Context;
 use chrono::{Duration as ChronoDuration, NaiveDate, Utc};
 use chrono_tz::Asia::Shanghai;
 use larkoapi::LarkBotClient;
-use larkstack_core::ActionEnvelope;
 use serde::Deserialize;
 use serde_json::Value;
-use tokio::sync::mpsc;
-use tracing::{info, warn};
+use tracing::warn;
 
 use crate::config::StandupConfig;
 use crate::flow;
@@ -26,8 +24,7 @@ struct UrgentUserParams {
     date: Option<String>,
 }
 
-/// Handle one action, returning a human-readable result. Shared by the embedded
-/// App instance and the legacy drain loop.
+/// Handle one action, returning a human-readable result.
 pub async fn handle(
     cfg: &StandupConfig,
     bot: &Arc<LarkBotClient>,
@@ -70,20 +67,6 @@ pub async fn handle(
             Ok(format!("urgent-user {} {d}", p.open_id))
         }
         other => anyhow::bail!("unknown action '{other}'"),
-    }
-}
-
-/// Legacy drain loop (standalone supervisor path); logs each result.
-pub async fn handle_actions(
-    cfg: StandupConfig,
-    bot: Arc<LarkBotClient>,
-    mut rx: mpsc::UnboundedReceiver<ActionEnvelope>,
-) {
-    while let Some(env) = rx.recv().await {
-        match handle(&cfg, &bot, &env.name, env.params).await {
-            Ok(msg) => info!(action = %env.name, "ok: {msg}"),
-            Err(e) => warn!(action = %env.name, "failed: {e:#}"),
-        }
     }
 }
 

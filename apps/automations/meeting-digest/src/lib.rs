@@ -14,7 +14,6 @@ pub mod pipeline;
 pub mod run;
 pub mod stt;
 
-pub use actions::handle_actions;
 pub use app::app;
 pub use config::{AppConfig, DigestConfig, LarkConfig, SttConfig, SttProvider};
 pub use run::{build_pipeline, run, run_ws};

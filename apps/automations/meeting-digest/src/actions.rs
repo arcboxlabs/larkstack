@@ -1,11 +1,6 @@
-use std::sync::Arc;
-
 use anyhow::Context;
-use larkstack_core::ActionEnvelope;
 use serde::Deserialize;
 use serde_json::Value;
-use tokio::sync::mpsc;
-use tracing::{info, warn};
 
 use crate::pipeline::Pipeline;
 
@@ -18,8 +13,7 @@ struct ProcessMeetingParams {
     url: Option<String>,
 }
 
-/// Handle one action, returning a human-readable result. Shared by the embedded
-/// App instance and the legacy drain loop.
+/// Handle one action, returning a human-readable result.
 pub async fn handle(pipeline: &Pipeline, action: &str, params: Value) -> anyhow::Result<String> {
     match action {
         "process-meeting" => {
@@ -35,18 +29,5 @@ pub async fn handle(pipeline: &Pipeline, action: &str, params: Value) -> anyhow:
             ))
         }
         other => anyhow::bail!("unknown action '{other}'"),
-    }
-}
-
-/// Legacy drain loop (standalone supervisor path); logs each result.
-pub async fn handle_actions(
-    pipeline: Arc<Pipeline>,
-    mut rx: mpsc::UnboundedReceiver<ActionEnvelope>,
-) {
-    while let Some(env) = rx.recv().await {
-        match handle(&pipeline, &env.name, env.params).await {
-            Ok(msg) => info!(action = %env.name, "{msg}"),
-            Err(e) => warn!(action = %env.name, "{e:#}"),
-        }
     }
 }
