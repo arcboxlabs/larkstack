@@ -1,12 +1,6 @@
 [workspace]
 resolver = "2"
-members = [
-    "crates/console",
-    "crates/control",
-    "crates/linear-bridge",
-    "crates/meeting-digest",
-    "crates/standup-bot",
-]
+members = ["crates/*", "apps/*/*"]
 
 [workspace.package]
 edition = "2024"

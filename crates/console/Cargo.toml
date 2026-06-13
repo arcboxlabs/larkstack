@@ -33,6 +33,6 @@ toml = "0.9"
 subtle = "2"
 
 control = { path = "../control" }
-linear-bridge = { path = "../linear-bridge" }
-meeting-digest = { path = "../meeting-digest" }
-standup-bot = { path = "../standup-bot" }
+linear-bridge = { path = "../../apps/integrations/linear-bridge" }
+meeting-digest = { path = "../../apps/automations/meeting-digest" }
+standup-bot = { path = "../../apps/automations/standup-bot" }

@@ -24,4 +24,4 @@ async-trait = "0.1"
 askama = "0.15"
 toml = "0.9"
 anyhow = "1"
-control = { path = "../control" }
+control = { path = "../../../crates/control" }
