@@ -18,12 +18,14 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::{RwLock, broadcast, mpsc, watch};
 
 pub mod app;
+mod lark;
 mod metrics;
 mod state;
 mod store;
 mod tracing_layer;
 
 pub use app::{ActionSpec, App, AppServices, Instance, Kind, Manifest};
+pub use lark::{LarkApp, LarkRegistry, default_base_url};
 pub use metrics::{Metric, MetricsSink, SqliteMetricsSink};
 pub use state::{SqliteStateStore, StateStore};
 pub use store::EventStore;
