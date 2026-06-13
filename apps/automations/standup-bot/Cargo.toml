@@ -25,3 +25,4 @@ askama = "0.15"
 toml = "0.9"
 anyhow = "1"
 larkstack-core = { path = "../../../crates/larkstack-core" }
+tokio-util = "0.7"

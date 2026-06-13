@@ -1157,6 +1157,7 @@ name = "linear-bridge"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "axum",
  "figment",
  "hex",
@@ -1168,6 +1169,7 @@ dependencies = [
  "serde_json",
  "sha2",
  "tokio",
+ "tokio-util",
  "toml",
  "tracing",
  "tracing-subscriber",
@@ -1232,6 +1234,7 @@ dependencies = [
  "tempfile",
  "thiserror",
  "tokio",
+ "tokio-util",
  "toml",
  "tracing",
  "tracing-subscriber",
@@ -2009,6 +2012,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
+ "tokio-util",
  "toml",
  "tracing",
  "tracing-subscriber",

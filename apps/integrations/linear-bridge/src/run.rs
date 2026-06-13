@@ -6,6 +6,7 @@ use axum::{
     routing::{get, post},
 };
 use larkstack_core::ControlHandle;
+use tokio_util::sync::CancellationToken;
 use tracing::info;
 
 use crate::config::AppState;
@@ -14,7 +15,9 @@ async fn health() -> &'static str {
     "ok"
 }
 
-pub async fn run(state: Arc<AppState>, handle: ControlHandle) -> anyhow::Result<()> {
+/// Build the webhook router and serve it until `cancel` fires. Shared by the
+/// embedded App instance and the standalone binary.
+pub async fn serve(state: Arc<AppState>, cancel: CancellationToken) -> anyhow::Result<()> {
     let addr = format!("0.0.0.0:{}", state.server.port);
 
     let app = Router::new()
@@ -27,12 +30,15 @@ pub async fn run(state: Arc<AppState>, handle: ControlHandle) -> anyhow::Result<
         .await
         .with_context(|| format!("bind {addr}"))?;
     info!("linear-bridge listening on {addr}");
-    handle.running().await;
 
-    let serve = axum::serve(listener, app);
-    if let Err(e) = serve.await {
-        handle.errored(format!("server error: {e}")).await;
-        return Err(e.into());
-    }
+    axum::serve(listener, app)
+        .with_graceful_shutdown(async move { cancel.cancelled().await })
+        .await?;
     Ok(())
+}
+
+/// Standalone entrypoint with its own [`ControlHandle`]; serves until killed.
+pub async fn run(state: Arc<AppState>, handle: ControlHandle) -> anyhow::Result<()> {
+    handle.running().await;
+    serve(state, CancellationToken::new()).await
 }

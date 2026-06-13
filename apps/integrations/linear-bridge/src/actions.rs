@@ -1,49 +1,54 @@
 use std::sync::Arc;
 
+use anyhow::Context;
 use larkstack_core::ActionEnvelope;
+use serde_json::{Value, json};
 use tokio::sync::mpsc;
 use tracing::{info, warn};
 
 use crate::config::AppState;
 
-/// Drain action envelopes addressed to `linear-bridge`. Each handler emits
-/// tracing events; the console surfaces them through SSE so success/failure
-/// is visible in the UI without an explicit response channel.
+/// Handle one action, returning a human-readable result. Shared by the embedded
+/// App instance and the legacy drain loop.
+pub async fn handle(state: &AppState, action: &str, _params: Value) -> anyhow::Result<String> {
+    match action {
+        "ping" => Ok("pong".into()),
+        "test-lark" => send_test_message(state).await,
+        other => anyhow::bail!("unknown action '{other}'"),
+    }
+}
+
+/// Legacy drain loop (standalone supervisor path); logs each result to the
+/// event stream.
 pub async fn handle_actions(state: Arc<AppState>, mut rx: mpsc::UnboundedReceiver<ActionEnvelope>) {
     while let Some(env) = rx.recv().await {
-        match env.name.as_str() {
-            "ping" => info!(action = "ping", "pong"),
-            "test-lark" => send_test_message(&state).await,
-            other => warn!(action = other, "unknown action"),
+        match handle(&state, &env.name, env.params).await {
+            Ok(msg) => info!(action = %env.name, "{msg}"),
+            Err(e) => warn!(action = %env.name, "{e:#}"),
         }
     }
 }
 
-async fn send_test_message(state: &AppState) {
+async fn send_test_message(state: &AppState) -> anyhow::Result<String> {
     if state.lark.webhook_url.is_empty() {
-        warn!(action = "test-lark", "skipped: LARK_WEBHOOK_URL not set");
-        return;
+        anyhow::bail!("LARK_WEBHOOK_URL not set");
     }
-    let body = serde_json::json!({
+    let body = json!({
         "msg_type": "text",
         "content": { "text": "[larkstack-console] test message" },
     });
-    match state
+    let resp = state
         .http
         .post(&state.lark.webhook_url)
         .json(&body)
         .send()
         .await
-    {
-        Ok(resp) => {
-            let status = resp.status();
-            let text = resp.text().await.unwrap_or_default();
-            if status.is_success() {
-                info!(action = "test-lark", status = status.as_u16(), "{text}");
-            } else {
-                warn!(action = "test-lark", status = status.as_u16(), "{text}");
-            }
-        }
-        Err(e) => warn!(action = "test-lark", "send failed: {e}"),
+        .context("send failed")?;
+    let status = resp.status();
+    let text = resp.text().await.unwrap_or_default();
+    if status.is_success() {
+        Ok(format!("sent ({}): {text}", status.as_u16()))
+    } else {
+        anyhow::bail!("{} {text}", status.as_u16())
     }
 }

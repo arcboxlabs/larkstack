@@ -1,10 +1,12 @@
 use std::sync::Arc;
 
+use anyhow::Context;
 use chrono::{Duration as ChronoDuration, NaiveDate, Utc};
 use chrono_tz::Asia::Shanghai;
-use larkstack_core::ActionEnvelope;
 use larkoapi::LarkBotClient;
+use larkstack_core::ActionEnvelope;
 use serde::Deserialize;
+use serde_json::Value;
 use tokio::sync::mpsc;
 use tracing::{info, warn};
 
@@ -24,76 +26,74 @@ struct UrgentUserParams {
     date: Option<String>,
 }
 
+/// Handle one action, returning a human-readable result. Shared by the embedded
+/// App instance and the legacy drain loop.
+pub async fn handle(
+    cfg: &StandupConfig,
+    bot: &Arc<LarkBotClient>,
+    action: &str,
+    params: Value,
+) -> anyhow::Result<String> {
+    match action {
+        "announce" => {
+            let d = date_param(&params, tomorrow());
+            flow::announce(cfg, bot, d).await.map_err(into_err)?;
+            Ok(format!("announce {d}"))
+        }
+        "ensure" => {
+            let d = date_param(&params, tomorrow());
+            flow::ensure(cfg, bot, d).await.map_err(into_err)?;
+            Ok(format!("ensure {d}"))
+        }
+        "remind" => {
+            let d = date_param(&params, today());
+            flow::remind(cfg, bot, d, false).await.map_err(into_err)?;
+            Ok(format!("remind {d}"))
+        }
+        "urgent" => {
+            let d = date_param(&params, today());
+            flow::remind(cfg, bot, d, true).await.map_err(into_err)?;
+            Ok(format!("urgent {d}"))
+        }
+        "check" => {
+            let d = date_param(&params, today());
+            flow::check(cfg, bot, d).await.map_err(into_err)?;
+            Ok(format!("check {d}"))
+        }
+        "urgent-user" => {
+            let p: UrgentUserParams =
+                serde_json::from_value(params).context("invalid params (need open_id)")?;
+            let d = resolve_date(p.date.as_deref(), today());
+            flow::urgent_one(cfg, bot, d, &p.open_id)
+                .await
+                .map_err(into_err)?;
+            Ok(format!("urgent-user {} {d}", p.open_id))
+        }
+        other => anyhow::bail!("unknown action '{other}'"),
+    }
+}
+
+/// Legacy drain loop (standalone supervisor path); logs each result.
 pub async fn handle_actions(
     cfg: StandupConfig,
     bot: Arc<LarkBotClient>,
     mut rx: mpsc::UnboundedReceiver<ActionEnvelope>,
 ) {
     while let Some(env) = rx.recv().await {
-        let result = match env.name.as_str() {
-            "announce" => with_date(env.params, tomorrow(), |d| {
-                let (cfg, bot) = (cfg.clone(), Arc::clone(&bot));
-                async move { flow::announce(&cfg, &bot, d).await }
-            })
-            .await
-            .map(|d| format!("announce {d}")),
-            "ensure" => with_date(env.params, tomorrow(), |d| {
-                let (cfg, bot) = (cfg.clone(), Arc::clone(&bot));
-                async move { flow::ensure(&cfg, &bot, d).await }
-            })
-            .await
-            .map(|d| format!("ensure {d}")),
-            "remind" => with_date(env.params, today(), |d| {
-                let (cfg, bot) = (cfg.clone(), Arc::clone(&bot));
-                async move { flow::remind(&cfg, &bot, d, false).await }
-            })
-            .await
-            .map(|d| format!("remind {d}")),
-            "urgent" => with_date(env.params, today(), |d| {
-                let (cfg, bot) = (cfg.clone(), Arc::clone(&bot));
-                async move { flow::remind(&cfg, &bot, d, true).await }
-            })
-            .await
-            .map(|d| format!("urgent {d}")),
-            "check" => with_date(env.params, today(), |d| {
-                let (cfg, bot) = (cfg.clone(), Arc::clone(&bot));
-                async move { flow::check(&cfg, &bot, d).await }
-            })
-            .await
-            .map(|d| format!("check {d}")),
-            "urgent-user" => match serde_json::from_value::<UrgentUserParams>(env.params) {
-                Ok(p) => {
-                    let d = resolve_date(p.date.as_deref(), today());
-                    flow::urgent_one(&cfg, &bot, d, &p.open_id)
-                        .await
-                        .map(|_| format!("urgent-user {} {d}", p.open_id))
-                }
-                Err(e) => Err(format!("invalid params (need open_id): {e}")),
-            },
-            other => {
-                warn!(action = other, "unknown action");
-                continue;
-            }
-        };
-        match result {
+        match handle(&cfg, &bot, &env.name, env.params).await {
             Ok(msg) => info!(action = %env.name, "ok: {msg}"),
-            Err(e) => warn!(action = %env.name, "failed: {e}"),
+            Err(e) => warn!(action = %env.name, "failed: {e:#}"),
         }
     }
 }
 
-async fn with_date<F, Fut>(
-    params: serde_json::Value,
-    default: NaiveDate,
-    run: F,
-) -> Result<NaiveDate, String>
-where
-    F: FnOnce(NaiveDate) -> Fut,
-    Fut: std::future::Future<Output = Result<(), String>>,
-{
-    let p: DateParams = serde_json::from_value(params).unwrap_or_default();
-    let date = resolve_date(p.date.as_deref(), default);
-    run(date).await.map(|_| date)
+fn into_err(e: String) -> anyhow::Error {
+    anyhow::anyhow!(e)
+}
+
+fn date_param(params: &Value, default: NaiveDate) -> NaiveDate {
+    let p: DateParams = serde_json::from_value(params.clone()).unwrap_or_default();
+    resolve_date(p.date.as_deref(), default)
 }
 
 fn today() -> NaiveDate {

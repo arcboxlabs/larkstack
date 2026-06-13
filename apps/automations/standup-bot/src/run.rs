@@ -1,17 +1,15 @@
 use std::sync::Arc;
 
-use larkstack_core::ControlHandle;
 use larkoapi::{LarkBotClient, WsEventHandler, ws};
+use larkstack_core::ControlHandle;
+use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
 
 use crate::commands::CommandBot;
 use crate::config::AppConfig;
 use crate::scheduler;
 
-/// Build the Lark bot client from a typed config. Synchronous, cheap, returns
-/// immediately. Split out of [`run`] so callers (the console) can hand the
-/// bot to other tasks (e.g. the action handler) before the scheduler/WS
-/// loop blocks forever.
+/// Build the Lark bot client from a typed config. Synchronous and cheap.
 pub fn build_bot(cfg: &AppConfig) -> anyhow::Result<Arc<LarkBotClient>> {
     if cfg.lark.app_id.is_empty() || cfg.lark.app_secret.is_empty() {
         anyhow::bail!("LARK_APP_ID / LARK_APP_SECRET required");
@@ -25,10 +23,14 @@ pub fn build_bot(cfg: &AppConfig) -> anyhow::Result<Arc<LarkBotClient>> {
     )))
 }
 
-/// Spawn the WS command handler (best-effort — disabled if `bot_open_id`
-/// lookup fails) and run the scheduler in the foreground. Returns when the
-/// scheduler exits.
-pub async fn run_with_bot(cfg: AppConfig, bot: Arc<LarkBotClient>, handle: ControlHandle) {
+/// Spawn the WS command handler (best-effort) and run the scheduler until
+/// `cancel` fires. Shared by the embedded App instance and the standalone
+/// binary. The WS task is tied to `cancel` so a restart doesn't leak it.
+pub async fn serve_with_bot(
+    cfg: &AppConfig,
+    bot: Arc<LarkBotClient>,
+    cancel: CancellationToken,
+) -> anyhow::Result<()> {
     match bot.bot_open_id().await {
         Ok(bot_open_id) => {
             info!("standup: bot open_id = {bot_open_id}");
@@ -41,18 +43,31 @@ pub async fn run_with_bot(cfg: AppConfig, bot: Arc<LarkBotClient>, handle: Contr
             let app_id = cfg.lark.app_id.clone();
             let app_secret = cfg.lark.app_secret.clone();
             let http_ws = reqwest::Client::new();
+            let ws_cancel = cancel.clone();
             tokio::spawn(async move {
-                ws::run_ws_client(&base_url, &app_id, &app_secret, handler, http_ws).await;
+                tokio::select! {
+                    _ = ws::run_ws_client(&base_url, &app_id, &app_secret, handler, http_ws) => {}
+                    _ = ws_cancel.cancelled() => {}
+                }
             });
         }
         Err(e) => warn!("standup: bot_open_id lookup failed ({e}); command bot disabled"),
     }
-    handle.running().await;
-    scheduler::run(cfg.standup, bot).await;
+
+    tokio::select! {
+        _ = scheduler::run(cfg.standup.clone(), bot) => {}
+        _ = cancel.cancelled() => info!("standup: scheduler stopped"),
+    }
+    Ok(())
 }
 
-/// Convenience: build + run, for callers (standalone bin) that don't need
-/// the bot handle.
+/// Standalone runner with its own [`ControlHandle`].
+pub async fn run_with_bot(cfg: AppConfig, bot: Arc<LarkBotClient>, handle: ControlHandle) {
+    handle.running().await;
+    let _ = serve_with_bot(&cfg, bot, CancellationToken::new()).await;
+}
+
+/// Convenience: build + run, for the standalone binary.
 pub async fn run(cfg: AppConfig, handle: ControlHandle) -> anyhow::Result<()> {
     let bot = build_bot(&cfg)?;
     run_with_bot(cfg, bot, handle).await;

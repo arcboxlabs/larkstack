@@ -34,6 +34,7 @@ url = "2"
 clap = { version = "4", features = ["derive"] }
 toml = "0.9"
 larkstack-core = { path = "../../../crates/larkstack-core" }
+tokio-util = "0.7"
 
 whisper-rs = { version = "0.14", optional = true }
 hound = { version = "3", optional = true }
