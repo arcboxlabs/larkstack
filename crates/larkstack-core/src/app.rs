@@ -13,6 +13,8 @@ use serde::Serialize;
 use serde_json::Value;
 use tokio_util::sync::CancellationToken;
 
+use crate::{MetricsSink, StateStore};
+
 /// Which family an App belongs to. Drives UI grouping and the supervisor's stop
 /// strategy: Integrations are stateless and hard-abort-safe; Automations hold
 /// in-flight multi-step flows and rely on cooperative cancellation.
@@ -59,6 +61,14 @@ impl ActionSpec {
     }
 }
 
+/// Framework capabilities handed to an App at build time. Cheap to clone (all
+/// `Arc`). An App namespaces its [`StateStore`] keys under its own name.
+#[derive(Clone)]
+pub struct AppServices {
+    pub state: Arc<dyn StateStore>,
+    pub metrics: Arc<dyn MetricsSink>,
+}
+
 /// A registered App: a long-lived descriptor that builds a config-bound
 /// [`Instance`] on demand.
 #[async_trait]
@@ -67,10 +77,11 @@ pub trait App: Send + Sync + 'static {
     fn manifest(&self) -> Manifest;
 
     /// Build a running instance from the current console config (full TOML; the
-    /// App reads its own `[name]` section, overlaying env as it sees fit).
-    /// Called on every (re)start — enable, config change, crash restart. An
-    /// `Err` marks the App errored in the console.
-    async fn build(&self, config: &str) -> anyhow::Result<Arc<dyn Instance>>;
+    /// App reads its own `[name]` section, overlaying env as it sees fit) plus
+    /// the framework [`AppServices`]. Called on every (re)start. An `Err` marks
+    /// the App errored in the console.
+    async fn build(&self, config: &str, services: AppServices)
+    -> anyhow::Result<Arc<dyn Instance>>;
 }
 
 /// A live, config-bound App instance. The host drives both methods concurrently.

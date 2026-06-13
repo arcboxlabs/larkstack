@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use larkstack_core::{ActionSpec, App, Instance, Kind, Manifest};
+use larkstack_core::{ActionSpec, App, AppServices, Instance, Kind, Manifest};
 use serde_json::{Value, json};
 use tokio_util::sync::CancellationToken;
 
@@ -38,7 +38,11 @@ impl App for MeetingDigestApp {
         }
     }
 
-    async fn build(&self, config: &str) -> anyhow::Result<Arc<dyn Instance>> {
+    async fn build(
+        &self,
+        config: &str,
+        _services: AppServices,
+    ) -> anyhow::Result<Arc<dyn Instance>> {
         let cfg = AppConfig::from_toml(config).map_err(|e| anyhow::anyhow!("config: {e}"))?;
         let pipeline = build_pipeline(&cfg)?;
         Ok(Arc::new(MeetingDigestInstance { cfg, pipeline }))

@@ -23,7 +23,7 @@ mod state;
 mod store;
 mod tracing_layer;
 
-pub use app::{ActionSpec, App, Instance, Kind, Manifest};
+pub use app::{ActionSpec, App, AppServices, Instance, Kind, Manifest};
 pub use metrics::{Metric, MetricsSink, SqliteMetricsSink};
 pub use state::{SqliteStateStore, StateStore};
 pub use store::EventStore;

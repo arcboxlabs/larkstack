@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use larkstack_core::{ActionSpec, App, Instance, Kind, Manifest};
+use larkstack_core::{ActionSpec, App, AppServices, Instance, Kind, Manifest};
 use serde_json::Value;
 use tokio_util::sync::CancellationToken;
 
@@ -28,7 +28,11 @@ impl App for LinearBridgeApp {
         }
     }
 
-    async fn build(&self, config: &str) -> anyhow::Result<Arc<dyn Instance>> {
+    async fn build(
+        &self,
+        config: &str,
+        _services: AppServices,
+    ) -> anyhow::Result<Arc<dyn Instance>> {
         let state = AppState::from_toml(config).map_err(|e| anyhow::anyhow!("config: {e}"))?;
         Ok(Arc::new(LinearBridgeInstance {
             state: Arc::new(state),

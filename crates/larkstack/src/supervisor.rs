@@ -8,13 +8,13 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use larkstack_core::{ActionEnvelope, App, ControlPlane, Instance};
+use larkstack_core::{ActionEnvelope, App, AppServices, ControlPlane, Instance};
 use tokio::sync::{mpsc, watch};
 use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
 
 /// Spawn the supervising task for one registered App.
-pub(crate) fn supervise(control: ControlPlane, app: Arc<dyn App>) {
+pub(crate) fn supervise(control: ControlPlane, app: Arc<dyn App>, services: AppServices) {
     let name = app.manifest().name;
     let handle = control.handle(&name);
     let mut config_rx = control.watch_config();
@@ -34,7 +34,7 @@ pub(crate) fn supervise(control: ControlPlane, app: Arc<dyn App>) {
             }
 
             handle.starting().await;
-            let instance = match app.build(&config).await {
+            let instance = match app.build(&config, services.clone()).await {
                 Ok(inst) => inst,
                 Err(e) => {
                     warn!(app = %name, "build failed: {e:#}");

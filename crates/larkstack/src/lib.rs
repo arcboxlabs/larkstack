@@ -25,7 +25,8 @@ use axum::{
 };
 use futures_util::stream::{Stream, StreamExt};
 use larkstack_core::{
-    ActionEnvelope, App, ControlLayer, ControlPlane, DispatchError, EventStore, Manifest,
+    ActionEnvelope, App, AppServices, ControlLayer, ControlPlane, DispatchError, EventStore,
+    Manifest, SqliteMetricsSink, SqliteStateStore,
 };
 use serde::Deserialize;
 use subtle::ConstantTimeEq;
@@ -132,8 +133,12 @@ impl Larkstack {
         init_tracing(&control);
         spawn_persistence(&control, &store);
 
+        let services = AppServices {
+            state: Arc::new(SqliteStateStore::open(data_dir.join("state.db"))?),
+            metrics: Arc::new(SqliteMetricsSink::open(data_dir.join("metrics.db"))?),
+        };
         for app in &self.apps {
-            supervisor::supervise(control.clone(), app.clone());
+            supervisor::supervise(control.clone(), app.clone(), services.clone());
         }
         let manifests: Vec<Manifest> = self.apps.iter().map(|a| a.manifest()).collect();
 
