@@ -8,7 +8,7 @@ Guidance for coding agents working in this repository.
 
 Framework crates (`crates/`):
 
-- **crates/larkstack-core** — The plug-in contract + control plane. `App` (`manifest()` + `build(config) -> Arc<dyn Instance>`) and `Instance` (`run(cancel)` + `handle_action(action, params)`); `Manifest`/`ActionSpec`/`Kind`; plus `ControlPlane`/`ControlHandle`/`Status`/`Event`/`EventStore` and the tracing→event `ControlLayer`. Apps depend only on this crate.
+- **crates/larkstack-core** — The plug-in contract + control plane. `App` (`manifest()` + `build(config) -> Arc<dyn Instance>`) and `Instance` (`run(cancel)` + `handle_action(action, params)`); `Manifest`/`ActionSpec`/`Kind`; the `LarkApp`/`LarkRegistry` credential registry (`[lark-apps.<name>]`); plus `ControlPlane`/`ControlHandle`/`Status`/`Event`/`EventStore` and the tracing→event `ControlLayer`. Apps depend only on this crate.
 - **crates/larkstack** — The host (lib). `Larkstack::new().register(app).run()`: a per-app supervisor state machine, the axum admin API + SSE + embedded React UI, the SQLite event store, config load + live reload, graceful shutdown. Depends only on `larkstack-core` (never on apps).
 - **crates/console** — Thin binary `larkstack-console` (~10 lines): registers the bundled apps and runs the host. One process, one deploy.
 
@@ -27,9 +27,11 @@ An App is a registered descriptor (`fn app() -> Arc<dyn App>`) that builds a con
 - reads `[<app-name>].enabled` from the config (default **false**) → `Stopped` when off;
 - when enabled: `Starting` → `App::build(full_toml)` → `Running`; a build error or `Instance::run` returning/panicking → `Errored` + exponential-backoff restart (panics are caught as `JoinError`, never left showing green);
 - drives `Instance::run(cancel)` (the main loop; must honor the `CancellationToken` for cooperative shutdown) and `Instance::handle_action(name, params) -> Result<String>` (console-dispatched actions) concurrently; action results are surfaced to the event stream;
-- a config change restarts **only** the apps whose own `[name]` section changed — editing one app never bounces another.
+- a config change restarts **only** the apps affected: an app's *change key* is its own `[name]` section **plus** the `[lark-apps.<ref>]` entry it binds to, so editing one app — or the shared Lark credentials it references — never bounces an unrelated app.
 
 `App::build` reads its `[name]` section from the full TOML, overlaying env vars (`LINEAR_*`, `LARK_*`, …) per field, so secrets stay in the environment while ops fields are edited from the UI. Toggle an app by flipping `[name].enabled` in the config (UI Config tab → PUT → the supervisor (re)starts it).
+
+**Lark-app registry.** Lark credentials live once under `[lark-apps.<name>] = { app_id, app_secret, base_url }`; an app binds to one with `lark_app = "<name>"` in its own section (resolved in each app's `from_toml`, before the inline `[<app>].lark` / env overlay, which still works for standalone bins). Onboard/manage entries from the console's **Lark Apps** tab, which live-tests the credentials (mints a `tenant_access_token`) before saving. Credentials are stored plaintext in `config.toml` (CONSOLE_TOKEN-gated); the registry GET redacts `app_secret`.
 
 **Frontend** lives in `crates/larkstack/web/` (React + Vite). `npm run build` emits to `crates/larkstack/web/dist/`, which `rust-embed` bakes into the host at compile time. `crates/larkstack/build.rs` writes a stub `index.html` if the frontend isn't built yet so `cargo build` always succeeds.
 
@@ -68,13 +70,14 @@ cd crates/larkstack/web && npm install && npm run build
 
 `Larkstack::new().register(app).run()`. `run()` opens the SQLite store, loads/creates `config.toml`, installs the tracing→event layer, spawns one `supervisor::supervise` task per registered app, then serves the admin API + UI.
 
-Supervisor (`src/supervisor.rs`): the per-app state machine described under *The App contract*. Change detection and the `enabled` check parse the app's top-level config section; an exponential backoff (1s→60s) governs build-error/crash restarts.
+Supervisor (`src/supervisor.rs`): the per-app state machine described under *The App contract*. The `enabled` check and change detection use a `ChangeKey` = the app's top-level section + the `[lark-apps.<ref>]` it binds to; an exponential backoff (1s→60s) governs build-error/crash restarts.
 
 Routes:
 - `GET /api/status` — `{ "subsystems": { "<name>": { "state", "message", "updated_at" } } }`
 - `GET /api/apps` — registered app manifests `{ "apps": [{ name, kind, description, actions }] }` (for generic UI rendering)
 - `GET /api/events` — SSE stream of `Event { id, level, subsystem, target, message, fields, timestamp }`. Honors `Last-Event-ID` / `?since=<id>` for backfill; otherwise replays the most recent 200 events from SQLite, then streams live.
-- `GET /api/config` — current TOML. `PUT /api/config` — validates by parsing, writes the file, broadcasts via `ControlPlane`'s watch channel; each supervisor sees the change and restarts only if its own section changed.
+- `GET /api/config` — current TOML. `PUT /api/config` — validates by parsing, writes the file, broadcasts via `ControlPlane`'s watch channel; each supervisor sees the change and restarts only if its own change key changed.
+- `GET /api/lark-apps` — registered Lark apps `{ "lark_apps": [{ name, app_id, base_url, has_secret }] }` (`app_secret` redacted). `POST /api/lark-apps` — body `{ name, app_id, app_secret, base_url? }`; **live-tests** the credentials and, only if valid, upserts `[lark-apps.<name>]` via `toml_edit` (comments preserved) + broadcasts. `400` if the test fails (nothing saved). `POST /api/lark-apps/test` — dry-run the same check without saving (`200 {ok, expire|error}`). `DELETE /api/lark-apps/{name}` — remove an entry (`404` if absent).
 - `POST /api/actions/{app}/{action}` — fire-and-forget; body is the optional `params` JSON. `202` on dispatch, `404` unknown app, `503` app not running. The result string from `Instance::handle_action` appears in the SSE event stream.
 - `GET /api/health` — `"ok"`. `GET /*` — embedded React SPA (falls back to `index.html`).
 
