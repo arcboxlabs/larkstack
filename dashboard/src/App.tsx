@@ -7,7 +7,7 @@ import { Events } from "./tabs/Events";
 import { LarkApps } from "./tabs/LarkApps";
 import { Status } from "./tabs/Status";
 import { Login } from "./Login";
-import { getToken, setToken, subscribe } from "./lib/auth";
+import { getMe, logout, refreshMe, subscribe, type Me } from "./lib/auth";
 
 type Tab = "status" | "actions" | "lark-apps" | "config" | "events";
 
@@ -25,28 +25,18 @@ function parseHash(): Tab {
 }
 
 export function App() {
-  const [token, setTok] = useState<string | null>(getToken());
-  const [authMode, setAuthMode] = useState<"unknown" | "open" | "secured">(
-    "unknown",
-  );
+  const [me, setMe] = useState<Me | null>(getMe());
   const [tab, setTab] = useState<Tab>(parseHash());
 
-  useEffect(() => subscribe(() => setTok(getToken())), []);
+  useEffect(() => subscribe(() => setMe(getMe())), []);
+  useEffect(() => {
+    refreshMe();
+  }, []);
 
   useEffect(() => {
     const onHash = () => setTab(parseHash());
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
-  }, []);
-
-  useEffect(() => {
-    fetch("/api/status")
-      .then((r) => {
-        if (r.status === 401) setAuthMode("secured");
-        else if (r.ok) setAuthMode("open");
-        else setAuthMode("secured");
-      })
-      .catch(() => setAuthMode("secured"));
   }, []);
 
   const navigate = (id: Tab) => {
@@ -55,16 +45,18 @@ export function App() {
     setTab(id);
   };
 
-  if (authMode === "unknown") {
+  if (me === null) {
     return (
       <main>
         <p>Loading…</p>
       </main>
     );
   }
-  if (authMode === "secured" && !token) {
-    return <Login onAuthed={() => setTok(getToken())} />;
+  if (me.auth_required && !me.authenticated) {
+    return <Login />;
   }
+
+  const who = me.user?.name || me.user?.email;
 
   return (
     <div className="app">
@@ -72,14 +64,22 @@ export function App() {
         <header className="app-header">
           <div className="app-title">larkstack console</div>
           <TabBar tabs={TABS} />
-          {token && (
-            <button
-              className="signout"
-              onClick={() => setToken(null)}
-              title="Sign out"
-            >
-              sign out
-            </button>
+          {me.authenticated && (
+            <div className="session">
+              {who && (
+                <span className="user-chip" title={me.user?.email}>
+                  {who}
+                </span>
+              )}
+              <button
+                className="signout"
+                type="button"
+                onClick={() => logout()}
+                title="Sign out"
+              >
+                sign out
+              </button>
+            </div>
           )}
         </header>
         <main>

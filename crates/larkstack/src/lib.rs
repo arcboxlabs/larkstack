@@ -14,22 +14,19 @@ use anyhow::Context;
 use axum::extract::Path as AxPath;
 use axum::{
     Json, Router,
-    extract::{Query, Request, State},
+    extract::{FromRef, Query, State},
     http::{HeaderMap, StatusCode, header},
-    middleware::{self, Next},
-    response::{
-        Response,
-        sse::{Event as SseEvent, KeepAlive, Sse},
-    },
+    middleware,
+    response::sse::{Event as SseEvent, KeepAlive, Sse},
     routing::get,
 };
+use axum_extra::extract::cookie::Key;
 use futures_util::stream::{Stream, StreamExt};
 use larkstack_core::{
     ActionEnvelope, App, AppServices, ControlLayer, ControlPlane, DispatchError, EventStore,
     Manifest, SqliteMetricsSink, SqliteStateStore,
 };
 use serde::Deserialize;
-use subtle::ConstantTimeEq;
 use tokio_stream::wrappers::{BroadcastStream, errors::BroadcastStreamRecvError};
 use tracing::{info, warn};
 use tracing_subscriber::layer::SubscriberExt;
@@ -37,6 +34,7 @@ use tracing_subscriber::util::SubscriberInitExt;
 
 mod assets;
 mod lark_apps;
+mod oauth;
 mod supervisor;
 
 const BACKFILL_LIMIT: usize = 200;
@@ -59,6 +57,16 @@ const DEFAULT_CONFIG: &str = r#"# larkstack console config
 # app_id = "cli_..."
 # app_secret = "..."
 # base_url = "https://open.larksuite.com"
+
+# Console sign-in uses Lark OAuth. Bind one of the [lark-apps] above as the
+# OAuth client; until then the console is OPEN (so you can reach this UI to set
+# it up). Register the redirect URI <your-console-url>/auth/callback in the Lark
+# app's security settings.
+[console]
+# lark_app = "main"             # which [lark-apps.<name>] signs users in
+# admins = ["you@example.com"]  # allowlist (matches Lark email); empty = any tenant user
+# redirect_uri = ""             # override the auto-derived <host>/auth/callback
+# scope = ""                    # extra OAuth scopes, space-separated (usually none)
 
 [linear]
 enabled = false
@@ -184,19 +192,15 @@ impl Larkstack {
             config_path: config_path.clone(),
             manifests: Arc::new(manifests),
             http: reqwest::Client::new(),
+            key: oauth::load_session_key(&data_dir),
         };
 
-        let token = std::env::var("CONSOLE_TOKEN").ok().map(Arc::new);
-        if token.is_none() {
+        if oauth::resolve(&control.config()).is_none() {
             warn!(
-                "CONSOLE_TOKEN is unset — /api/* is OPEN. Set CONSOLE_TOKEN to a \
-                 random secret before exposing this console outside localhost."
+                "Lark OAuth is not configured ([console].lark_app unset) — /api/* is \
+                 OPEN. Bind a Lark app from the console to require sign-in."
             );
         }
-        let auth_layer = middleware::from_fn(move |req, next| {
-            let token = token.clone();
-            async move { require_auth(token, req, next).await }
-        });
 
         let api = Router::new()
             .route("/status", get(status))
@@ -213,11 +217,21 @@ impl Larkstack {
                 "/actions/{app}/{action}",
                 axum::routing::post(dispatch_action),
             )
-            .route_layer(auth_layer)
+            .route_layer(middleware::from_fn_with_state(
+                state.clone(),
+                oauth::require_session,
+            ))
             .route("/health", get(|| async { "ok" }));
+
+        let auth = Router::new()
+            .route("/login", get(oauth::login))
+            .route("/callback", get(oauth::callback))
+            .route("/logout", axum::routing::post(oauth::logout))
+            .route("/me", get(oauth::me));
 
         let router = Router::new()
             .nest("/api", api)
+            .nest("/auth", auth)
             .fallback(assets::serve)
             .with_state(state);
 
@@ -245,6 +259,14 @@ struct HostState {
     config_path: Arc<PathBuf>,
     manifests: Arc<Vec<Manifest>>,
     http: reqwest::Client,
+    /// Signing key for the OAuth session/handshake cookies.
+    key: Key,
+}
+
+impl FromRef<HostState> for Key {
+    fn from_ref(state: &HostState) -> Self {
+        state.key.clone()
+    }
 }
 
 async fn shutdown_signal() {
@@ -310,64 +332,6 @@ fn spawn_persistence(control: &ControlPlane, store: &EventStore) {
             }
         }
     });
-}
-
-async fn require_auth(
-    expected: Option<Arc<String>>,
-    req: Request,
-    next: Next,
-) -> Result<Response, StatusCode> {
-    let Some(expected) = expected else {
-        return Ok(next.run(req).await);
-    };
-
-    let header_token = req
-        .headers()
-        .get(header::AUTHORIZATION)
-        .and_then(|v| v.to_str().ok())
-        .and_then(|v| v.strip_prefix("Bearer "));
-
-    let query_token = req
-        .uri()
-        .query()
-        .and_then(|q| {
-            q.split('&').find_map(|p| {
-                let (k, v) = p.split_once('=')?;
-                (k == "token").then_some(v)
-            })
-        })
-        .map(urldecode);
-
-    let provided = header_token.map(str::to_string).or(query_token);
-
-    match provided {
-        Some(p) if p.as_bytes().ct_eq(expected.as_bytes()).into() => Ok(next.run(req).await),
-        _ => Err(StatusCode::UNAUTHORIZED),
-    }
-}
-
-fn urldecode(s: &str) -> String {
-    let mut out = String::with_capacity(s.len());
-    let mut bytes = s.bytes();
-    while let Some(b) = bytes.next() {
-        match b {
-            b'%' => {
-                let h = bytes.next();
-                let l = bytes.next();
-                if let (Some(h), Some(l)) = (h, l)
-                    && let (Some(hi), Some(lo)) =
-                        ((h as char).to_digit(16), (l as char).to_digit(16))
-                {
-                    out.push(((hi << 4 | lo) as u8) as char);
-                } else {
-                    out.push('%');
-                }
-            }
-            b'+' => out.push(' '),
-            other => out.push(other as char),
-        }
-    }
-    out
 }
 
 async fn status(State(s): State<HostState>) -> (StatusCode, Json<serde_json::Value>) {

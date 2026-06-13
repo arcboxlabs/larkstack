@@ -9,9 +9,25 @@ One process, one deploy.
 | Variable | Default | Purpose |
 | :--- | :--- | :--- |
 | `CONSOLE_PORT` | `8080` | Listener for the admin UI + `/api/*` |
-| `CONSOLE_TOKEN` | _unset_ | Required value of `Authorization: Bearer <token>` for `/api/*` (except `/api/health`). **Unset = no auth** — the console logs a warning and keeps running. Only acceptable on a private network. |
-| `CONSOLE_DATA_DIR` | `./data` | Directory for `events.db` (SQLite event log, 10k rolling) and `config.toml`. Mount as a volume. |
+| `CONSOLE_SECRET` | _unset_ | Derives the session-cookie signing key, so logins survive restarts. **Unset = a random key is generated and persisted** to `session.key` in the data dir. |
+| `CONSOLE_DATA_DIR` | `./data` | Directory for `events.db` (event log, 10k rolling), `config.toml`, `state.db`/`metrics.db`, and `session.key`. Mount as a volume. |
 | `RUST_LOG` | `info` | tracing filter; same syntax as `env_logger` |
+
+## Authentication
+
+Sign-in is **Lark OAuth**. Bind a `[lark-apps.<name>]` as the console's OAuth
+client under `[console]`:
+
+```toml
+[console]
+lark_app = "main"               # one of the [lark-apps] entries
+admins = ["you@example.com"]    # email allowlist; empty = any tenant user
+# redirect_uri = "https://console.example.com/auth/callback"  # else auto-derived
+```
+
+Until `lark_app` is bound the console is **open** (so you can reach the UI to set
+it up); a warning is logged. Register `<console-url>/auth/callback` as a redirect
+URI in the Lark app's security settings, and grant it the user-info permission.
 
 Each subsystem's own env vars (`LINEAR_*`, `LARK_*`, `STT_*`, `DIGEST_*`,
 `STANDUP_*`, `PORT`, `DEBOUNCE_DELAY_MS`) are read by its config loader as
@@ -25,7 +41,7 @@ usually kept in env vars; ops fields are edited from the UI.
 docker build -t larkstack-console .
 docker run -d --name larkstack-console \
   -p 8080:8080 -p 3000:3000 \
-  -e CONSOLE_TOKEN=$(openssl rand -hex 32) \
+  -e CONSOLE_SECRET=$(openssl rand -hex 32) \
   -e LINEAR_WEBHOOK_SECRET=... \
   -e LARK_APP_ID=... -e LARK_APP_SECRET=... \
   -v larkstack-data:/data \
@@ -66,7 +82,7 @@ during shutdown.
 cd dashboard && pnpm install --frozen-lockfile && pnpm build && cd -
 cargo build -p console --release
 # binary at target/release/larkstack-console
-CONSOLE_TOKEN=$(openssl rand -hex 32) CONSOLE_DATA_DIR=./data \
+CONSOLE_SECRET=$(openssl rand -hex 32) CONSOLE_DATA_DIR=./data \
   ./target/release/larkstack-console
 ```
 

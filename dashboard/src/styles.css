@@ -428,7 +428,8 @@ th {
 
 .login button {
   font: inherit;
-  padding: 0.55rem;
+  margin-top: 1.5rem;
+  padding: 0.55rem 1.25rem;
   border: 1px solid currentColor;
   border-radius: 4px;
   background: transparent;
@@ -441,10 +442,25 @@ th {
   cursor: not-allowed;
 }
 
+.session {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.user-chip {
+  font-size: 0.8rem;
+  opacity: 0.75;
+  max-width: 16rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 button.signout {
   font: inherit;
   font-size: 0.75rem;
-  margin-left: auto;
   padding: 0.25rem 0.6rem;
   border: 1px solid color-mix(in srgb, canvastext 30%, transparent);
   border-radius: 4px;

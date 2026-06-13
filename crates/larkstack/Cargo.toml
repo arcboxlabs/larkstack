@@ -27,7 +27,10 @@ anyhow = { workspace = true }
 mime_guess = "2"
 rust-embed = { version = "8", features = ["debug-embed"] }
 toml = "0.9"
-subtle = "2"
 larkstack-core = { path = "../larkstack-core" }
 reqwest = { workspace = true, features = ["rustls-tls", "json"] }
 toml_edit = "0.25.12"
+axum-extra = { version = "0.12.6", features = ["cookie-signed"] }
+rand = "0.8"
+sha2 = "0.10"
+base64 = "0.22"

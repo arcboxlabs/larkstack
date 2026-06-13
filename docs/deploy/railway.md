@@ -7,9 +7,12 @@ built from the workspace-root `Dockerfile`.
 
 1. Create a new project on [Railway](https://railway.app/) and connect this repository.
 2. Leave **Root Directory** at the repo root so the workspace `Dockerfile` resolves.
-3. Add environment variables — at minimum `CONSOLE_TOKEN` (protects `/api/*`); see
-   [Configuration](../getting-started/configuration.md) for the full list. App
-   credentials can also be set from the console's Config / Lark Apps tabs.
+3. Add environment variables — `CONSOLE_SECRET` (a random value; keeps logins
+   valid across restarts) plus any app secrets; see
+   [Configuration](../getting-started/configuration.md). The `[console]`
+   Lark-OAuth binding and app credentials can also be set from the Config /
+   Lark Apps tabs. Register `<your-public-url>/auth/callback` as a redirect URI
+   in the Lark app.
 4. Railway detects the `Dockerfile` and builds on push. The admin UI + API serve on `$CONSOLE_PORT` (default `8080`).
 5. Enable the apps you want from the UI; each inbound integration serves its webhook on its
    own port (`[linear.server] 3000`, `[github.server] 3001`, `[x.server] 3002`) — expose the
@@ -21,7 +24,7 @@ built from the workspace-root `Dockerfile`.
 ```bash
 docker build -t larkstack-console .
 docker run -p 8080:8080 -p 3000:3000 \
-  -e CONSOLE_TOKEN=$(openssl rand -hex 32) \
+  -e CONSOLE_SECRET=$(openssl rand -hex 32) \
   -v larkstack-data:/data \
   larkstack-console
 ```

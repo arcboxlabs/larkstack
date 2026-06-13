@@ -37,7 +37,7 @@
 - **实时事件流**——所有子系统的 `tracing` 事件，SSE 支持 `?since=` / `Last-Event-ID` 回放，持久化到 SQLite（滚动 1 万条）
 - **配置编辑**——UI 内 TOML 编辑器，每个 app 有 `enabled` 开关，保存只热重启受影响的 app
 - **动作触发**——每个子系统的一次性命令（`linear`/`github`: ping/test-lark、`x`: ping、`standup-bot: announce/ensure/remind/urgent/check`、`meeting-digest: process-meeting`）
-- **认证**——`CONSOLE_TOKEN` 环境变量保护 `/api/*`
+- **认证**——通过 **Lark OAuth** 登录，`/api/*` 需要会话。在 `[console]` 绑定 Lark app 前控制台开放，绑定后按 `admins` 白名单限制
 
 ## 快速开始
 
@@ -46,12 +46,13 @@
 cd dashboard && pnpm install --frozen-lockfile && pnpm build && cd ..
 cargo build -p console --release
 
-# 2. 运行
-CONSOLE_TOKEN=$(openssl rand -hex 32) \
+# 2. 运行（在 UI 中配置 Lark OAuth 前控制台开放）
+CONSOLE_SECRET=$(openssl rand -hex 32) \
 LINEAR_WEBHOOK_SECRET=your_secret \
 LARK_WEBHOOK_URL=https://open.larksuite.com/open-apis/bot/v2/hook/xxx \
 ./target/release/larkstack-console
 # UI 在 http://localhost:8080；linear/github/x 的 webhook 在 :3000/:3001/:3002
+# CONSOLE_SECRET（可选）让会话在重启后保持有效；未设置时自动生成并持久化一个密钥。
 ```
 
 或者用 Docker：

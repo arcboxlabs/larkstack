@@ -39,7 +39,9 @@
 - **Live event stream** — every `tracing` event from every subsystem, SSE with `?since=` / `Last-Event-ID` backfill, persisted to SQLite (rolling 10k).
 - **Config editor** — TOML editor in the UI; each app has an `enabled` toggle, and saving hot-restarts only the affected app.
 - **Actions** — one-shot triggers per subsystem (`linear`/`github`: ping/test-lark, `x`: ping, `standup-bot: announce/ensure/remind/urgent/check`, `meeting-digest: process-meeting`).
-- **Auth** — `CONSOLE_TOKEN` env var protects `/api/*`.
+- **Auth** — sign in with **Lark OAuth**; `/api/*` needs a session. The console
+  is open until you bind a Lark app under `[console]`, then restricted to the
+  `admins` allowlist.
 
 ## Quick start
 
@@ -48,12 +50,14 @@
 cd dashboard && pnpm install --frozen-lockfile && pnpm build && cd ..
 cargo build -p console --release
 
-# 2. Run
-CONSOLE_TOKEN=$(openssl rand -hex 32) \
+# 2. Run (console is open until you set up Lark OAuth from the UI)
+CONSOLE_SECRET=$(openssl rand -hex 32) \
 LINEAR_WEBHOOK_SECRET=your_secret \
 LARK_WEBHOOK_URL=https://open.larksuite.com/open-apis/bot/v2/hook/xxx \
 ./target/release/larkstack-console
 # UI on http://localhost:8080; linear/github/x webhooks on :3000/:3001/:3002
+# CONSOLE_SECRET (optional) keeps sessions valid across restarts; a key is
+# auto-generated and persisted if unset.
 ```
 
 Or with Docker:

@@ -1,27 +1,19 @@
-const KEY = "larkstack.token";
+/// Console auth state. The session lives in an HttpOnly cookie set by the Lark
+/// OAuth flow; the browser sends it automatically, so there is no token to
+/// store. `/auth/me` reports whether OAuth is configured and who is signed in.
 
-let cached: string | null = null;
+export type Me = {
+  /// False when OAuth is unconfigured — the console is open, no login needed.
+  auth_required: boolean;
+  authenticated: boolean;
+  user?: { email: string; name: string };
+};
+
+let current: Me | null = null;
 const listeners = new Set<() => void>();
 
-export function getToken(): string | null {
-  if (cached !== null) return cached;
-  try {
-    cached = localStorage.getItem(KEY);
-  } catch {
-    cached = null;
-  }
-  return cached;
-}
-
-export function setToken(t: string | null) {
-  cached = t;
-  try {
-    if (t === null) localStorage.removeItem(KEY);
-    else localStorage.setItem(KEY, t);
-  } catch {
-    // private mode: just keep in-memory
-  }
-  listeners.forEach((fn) => fn());
+export function getMe(): Me | null {
+  return current;
 }
 
 export function subscribe(fn: () => void): () => void {
@@ -29,27 +21,40 @@ export function subscribe(fn: () => void): () => void {
   return () => listeners.delete(fn);
 }
 
-/// `fetch` wrapper that injects the bearer token and surfaces 401 by
-/// clearing the cached token so the UI falls back to the login screen.
+export async function refreshMe(): Promise<Me> {
+  try {
+    const r = await fetch("/auth/me", { credentials: "same-origin" });
+    current = (await r.json()) as Me;
+  } catch {
+    current = { auth_required: true, authenticated: false };
+  }
+  listeners.forEach((fn) => fn());
+  return current;
+}
+
+/// `fetch` wrapper for `/api/*`. The session rides in the cookie, so no header
+/// is set; a 401 means it lapsed — re-probe so the UI falls back to login.
 export async function api(
   input: string,
   init: RequestInit = {},
 ): Promise<Response> {
-  const t = getToken();
-  const headers = new Headers(init.headers);
-  if (t) headers.set("Authorization", `Bearer ${t}`);
-  const r = await fetch(input, { ...init, headers });
-  if (r.status === 401) {
-    setToken(null);
-  }
+  const r = await fetch(input, { ...init, credentials: "same-origin" });
+  if (r.status === 401) refreshMe();
   return r;
 }
 
-/// EventSource doesn't support custom headers, so the token rides as a query
-/// param. URL-encode just in case the token contains reserved characters.
+/// EventSource sends the session cookie for same-origin requests, so the SSE
+/// URL needs no token.
 export function sseUrl(path: string): string {
-  const t = getToken();
-  if (!t) return path;
-  const sep = path.includes("?") ? "&" : "?";
-  return `${path}${sep}token=${encodeURIComponent(t)}`;
+  return path;
+}
+
+/// Redirect the browser into the Lark OAuth flow.
+export function login(): void {
+  window.location.assign("/auth/login");
+}
+
+export async function logout(): Promise<void> {
+  await fetch("/auth/logout", { method: "POST", credentials: "same-origin" });
+  await refreshMe();
 }

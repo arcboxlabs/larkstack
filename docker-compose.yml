@@ -11,8 +11,9 @@ services:
       - "3001:3001" # github
       - "3002:3002" # x
     environment:
-      # Required: random secret protecting /api/*. Leave unset for local-only dev.
-      # CONSOLE_TOKEN: replace-me
+      # Optional: signing key for login sessions (else auto-persisted to the
+      # data volume). Sign-in is Lark OAuth, configured under [console].
+      # CONSOLE_SECRET: replace-me
       # RUST_LOG: info
 
       # Subsystem secrets (read by each subsystem's config loader). Anything
