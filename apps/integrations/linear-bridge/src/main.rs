@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use control::ControlPlane;
+use larkstack_core::ControlPlane;
 use linear_bridge::config::AppState;
 
 #[tokio::main]

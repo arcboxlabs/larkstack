@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use chrono::{Duration as ChronoDuration, NaiveDate, Utc};
 use chrono_tz::Asia::Shanghai;
-use control::ActionEnvelope;
+use larkstack_core::ActionEnvelope;
 use larkoapi::LarkBotClient;
 use serde::Deserialize;
 use tokio::sync::mpsc;

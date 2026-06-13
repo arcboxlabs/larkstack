@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use chrono::{Duration as ChronoDuration, NaiveDate, Utc};
 use chrono_tz::Asia::Shanghai;
-use control::ControlPlane;
+use larkstack_core::ControlPlane;
 use larkoapi::LarkBotClient;
 use tracing::error;
 

@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use anyhow::Context;
-use control::ControlHandle;
+use larkstack_core::ControlHandle;
 use larkoapi::{LarkBotClient, WsEventHandler, ws};
 use tracing::info;
 

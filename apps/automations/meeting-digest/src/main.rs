@@ -2,7 +2,7 @@ use std::process::ExitCode;
 use std::sync::Arc;
 
 use clap::{Parser, Subcommand};
-use control::ControlPlane;
+use larkstack_core::ControlPlane;
 use larkoapi::LarkBotClient;
 use tracing::error;
 

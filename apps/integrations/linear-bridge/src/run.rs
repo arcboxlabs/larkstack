@@ -5,7 +5,7 @@ use axum::{
     Router,
     routing::{get, post},
 };
-use control::ControlHandle;
+use larkstack_core::ControlHandle;
 use tracing::info;
 
 use crate::config::AppState;

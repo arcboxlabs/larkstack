@@ -415,8 +415,8 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "axum",
- "control",
  "futures-util",
+ "larkstack-core",
  "linear-bridge",
  "meeting-digest",
  "mime_guess",
@@ -428,20 +428,6 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "toml",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "control"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "rusqlite",
- "serde",
- "serde_json",
- "thiserror",
- "tokio",
  "tracing",
  "tracing-subscriber",
 ]
@@ -1112,6 +1098,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "larkstack-core"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "lazy_static"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1156,11 +1156,11 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "axum",
- "control",
  "figment",
  "hex",
  "hmac",
  "larkoapi 0.5.0",
+ "larkstack-core",
  "reqwest",
  "serde",
  "serde_json",
@@ -1219,11 +1219,11 @@ dependencies = [
  "bytes",
  "chrono",
  "clap",
- "control",
  "figment",
  "futures-util",
  "hound",
  "larkoapi 0.5.0",
+ "larkstack-core",
  "reqwest",
  "serde",
  "serde_json",
@@ -2000,9 +2000,9 @@ dependencies = [
  "async-trait",
  "chrono",
  "chrono-tz",
- "control",
  "figment",
  "larkoapi 0.3.0",
+ "larkstack-core",
  "reqwest",
  "serde",
  "serde_json",

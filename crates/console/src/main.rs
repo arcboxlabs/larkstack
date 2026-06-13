@@ -16,7 +16,7 @@ use axum::{
     },
     routing::get,
 };
-use control::{
+use larkstack_core::{
     ActionEnvelope, ControlHandle, ControlLayer, ControlPlane, DispatchError, EventStore,
 };
 use futures_util::stream::{Stream, StreamExt};

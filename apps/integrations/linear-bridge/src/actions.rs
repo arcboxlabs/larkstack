@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use control::ActionEnvelope;
+use larkstack_core::ActionEnvelope;
 use tokio::sync::mpsc;
 use tracing::{info, warn};
 

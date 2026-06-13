@@ -32,7 +32,7 @@ rust-embed = { version = "8", features = ["debug-embed"] }
 toml = "0.9"
 subtle = "2"
 
-control = { path = "../control" }
+larkstack-core = { path = "../larkstack-core" }
 linear-bridge = { path = "../../apps/integrations/linear-bridge" }
 meeting-digest = { path = "../../apps/automations/meeting-digest" }
 standup-bot = { path = "../../apps/automations/standup-bot" }
