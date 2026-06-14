@@ -34,8 +34,6 @@ RUN apt-get update \
 COPY --from=rust-builder /build/target/release/larkstack-console /usr/local/bin/larkstack-console
 ENV CONSOLE_DATA_DIR=/data
 ENV CONSOLE_PORT=8080
-# Persist SQLite event log + config.toml between restarts.
-VOLUME ["/data"]
 EXPOSE 8080
 # Inbound integration webhook listeners (linear/github/x — see [<app>.server].port).
 EXPOSE 3000 3001 3002
