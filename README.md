@@ -1,15 +1,9 @@
-<div align="center">
-  <strong>English</strong> | <a href="./README_zh.md">简体中文</a>
-</div>
-
-<br>
-
-<h1 align="center">larkstack</h1>
+# Lark Stack - Integration Hub for Lark
 
 <p align="center">
-  Single-binary admin console + Lark/Feishu utility crates.
+  <strong>An open-source integration hub for Lark / Feishu</strong> — a Slack-grade ecosystem in one self-hosted binary.
   <br>
-  One process supervises everything, with a React Web UI for status, config, and one-shot actions.
+  One process supervises every integration and automation, with a React console for status, config, and one-shot actions.
 </p>
 
 <p align="center">
@@ -17,9 +11,55 @@
   <img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License">
 </p>
 
+<br>
+
+<p align="center">
+  <a href="./README.md"><img alt="README in English" src="https://img.shields.io/badge/English-d9d9d9"></a>
+  <a href="./README_CN.md"><img alt="简体中文 README" src="https://img.shields.io/badge/简体中文-d9d9d9"></a>
+</p>
+
 <hr>
 
-## What's in the box
+## Why Lark Stack
+
+Slack won startups on its ecosystem, not its chat. Thousands of integrations mean every tool a team already lives in shows up where they talk — a PR, a deploy, a paid invoice, an on-call page, a CRM update.
+
+But Lark's integration catalog is thin, especially outside China — so choosing it too often means giving up that ecosystem.
+
+**Lark Stack closes that gap.** A self-hosted, open-source hub that packs the missing Slack-grade integrations into one binary you toggle from a web console. And it's not only bridges: it also runs autonomous in-Lark automations (standup, meeting minutes, …) — growing the ecosystem deeper, not just wider. The `App`/`Instance` contract plus `lark-kit` make every new app a small, self-contained crate.
+
+The goal: a startup or business can pick Lark and lose nothing — every external tool bridged in, every recurring workflow run by a built-in automation, all where their team already works.
+
+## Apps
+
+Apps are pluggable units the console supervises and toggles. **Integrations** bridge an external system into Lark; **Automations** run autonomously on a schedule or event. Click a name for its docs.
+
+| App | Kind | What it does |
+| :--- | :--- | :--- |
+| [`linear`](./apps/integrations/linear) | Integration | Linear webhook → Lark notification cards + issue link previews |
+| [`github`](./apps/integrations/github) | Integration | GitHub webhook → PR/issue/CI/security-alert cards + review-request DMs |
+| [`x`](./apps/integrations/x) | Integration | X (Twitter) link previews rendered as Lark cards (preview-only) |
+| [`minutes`](./apps/automations/minutes) | Automation | Auto-transcribe Lark VC recordings (STT) → digest cards + optional Lark Doc |
+| [`standup`](./apps/automations/standup) | Automation | Daily standup reminders + on-demand commands (announce/remind/urgent/check) |
+
+The three integrations each run their own inbound HTTP server on a distinct port (linear `:3000`, github `:3001`, x `:3002`).
+
+## Roadmap
+
+The bridges above are a starting set; the ambition is category coverage that matches what a team expects from Slack's App Directory. Want one sooner — or one that's not listed? [Open an issue](../../issues) or send a PR: a new integration is one self-contained crate.
+
+| Category | Shipped | Next up |
+| :--- | :--- | :--- |
+| Dev & code | Linear, GitHub | GitLab, Jira, Sentry |
+| CI/CD & deploy | GitHub CI | Vercel, Netlify, generic webhook |
+| Incident & on-call | — | PagerDuty, Opsgenie, incident.io |
+| Observability | — | Datadog, Grafana, Alertmanager |
+| Revenue & growth | — | Stripe, HubSpot |
+| Support | — | Zendesk, Intercom |
+| Social & feeds | X / Twitter | RSS, status pages |
+| Team rituals | Standup | Polls, calendar digests, retros |
+
+## Framework
 
 | Crate | Purpose |
 | :--- | :--- |
@@ -27,11 +67,6 @@
 | `crates/larkstack` | Framework host — per-app supervisor + axum API + embedded React UI |
 | `crates/console` | Thin binary `larkstack-console` — registers the bundled apps and runs the host |
 | `crates/lark-kit` | Shared toolkit for the Lark integration apps (sink, inbound server, config, crypto) |
-| `apps/integrations/linear` | Linear webhook → Lark notifications + issue link previews (Integration) |
-| `apps/integrations/github` | GitHub webhook → Lark notifications (Integration) |
-| `apps/integrations/x` | X (Twitter) link previews in Lark (Integration) |
-| `apps/automations/minutes` | Auto-transcribe Lark VC recordings, post digest cards (Automation) |
-| `apps/automations/standup` | Daily standup reminders + on-demand actions (Automation) |
 
 ## Console features
 
