@@ -8,8 +8,6 @@
 //! and all — survives untouched, then broadcast via the control plane so every
 //! App referencing the changed entry restarts.
 
-use std::sync::Arc;
-
 use axum::Json;
 use axum::extract::{Path as AxPath, State};
 use larkstack_core::{LarkRegistry, default_base_url};
@@ -21,7 +19,7 @@ use utoipa::ToSchema;
 
 use crate::HostState;
 
-use super::{ApiError, OkResponse};
+use super::{ApiError, OkResponse, parse_doc, write_doc};
 
 /// `GET /api/lark-apps` — the registry, `app_secret` redacted to a boolean.
 #[utoipa::path(
@@ -86,7 +84,7 @@ pub(crate) async fn upsert(
 
     let mut doc = parse_doc(&s.control.config()).map_err(ApiError::internal)?;
     upsert_entry(&mut doc, &req.name, &req.app_id, &req.app_secret, &base_url);
-    write_config(&s, doc).map_err(ApiError::internal)?;
+    write_doc(&s, doc).map_err(ApiError::internal)?;
     info!(lark_app = %req.name, "lark-app credentials saved");
     Ok(Json(UpsertAck {
         ok: true,
@@ -114,7 +112,7 @@ pub(crate) async fn delete(
     if !remove_entry(&mut doc, &name) {
         return Err(ApiError::not_found(format!("no lark-app '{name}'")));
     }
-    write_config(&s, doc).map_err(ApiError::internal)?;
+    write_doc(&s, doc).map_err(ApiError::internal)?;
     info!(lark_app = %name, "lark-app deleted");
     Ok(Json(OkResponse::ok()))
 }
@@ -254,12 +252,6 @@ fn parse_registry(toml_str: &str) -> LarkRegistry {
         .unwrap_or_default()
 }
 
-fn parse_doc(toml_str: &str) -> Result<DocumentMut, String> {
-    toml_str
-        .parse::<DocumentMut>()
-        .map_err(|e| format!("config is not valid TOML: {e}"))
-}
-
 fn upsert_entry(doc: &mut DocumentMut, name: &str, app_id: &str, app_secret: &str, base_url: &str) {
     let apps = doc
         .entry("lark-apps")
@@ -287,14 +279,6 @@ fn remove_entry(doc: &mut DocumentMut, name: &str) -> bool {
         doc.remove("lark-apps");
     }
     existed
-}
-
-fn write_config(s: &HostState, doc: DocumentMut) -> Result<(), String> {
-    let body = doc.to_string();
-    std::fs::write(s.config_path.as_path(), &body)
-        .map_err(|e| format!("write {}: {e}", s.config_path.display()))?;
-    s.control.set_config(Arc::new(body));
-    Ok(())
 }
 
 fn normalize_base_url(raw: Option<String>) -> String {

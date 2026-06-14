@@ -21,6 +21,7 @@ use crate::HostState;
 
 pub(crate) mod actions;
 pub(crate) mod config;
+pub(crate) mod console_auth;
 pub(crate) mod events;
 pub(crate) mod lark_apps;
 pub(crate) mod oauth;
@@ -83,6 +84,26 @@ impl IntoResponse for ApiError {
     }
 }
 
+/// Parse the live config into an editable `toml_edit` document. Used by the
+/// structured-edit handlers (`lark_apps`, `console_auth`, app enable) that
+/// mutate one section while preserving the rest of the file — comments and all.
+pub(crate) fn parse_doc(toml_str: &str) -> Result<toml_edit::DocumentMut, String> {
+    toml_str
+        .parse::<toml_edit::DocumentMut>()
+        .map_err(|e| format!("config is not valid TOML: {e}"))
+}
+
+/// Persist an edited config document: write it to disk, then broadcast it on the
+/// control plane so every affected supervisor restarts. The single write path
+/// shared by all structured-edit handlers.
+pub(crate) fn write_doc(s: &HostState, doc: toml_edit::DocumentMut) -> Result<(), String> {
+    let body = doc.to_string();
+    std::fs::write(s.config_path.as_path(), &body)
+        .map_err(|e| format!("write {}: {e}", s.config_path.display()))?;
+    s.control.set_config(std::sync::Arc::new(body));
+    Ok(())
+}
+
 /// `GET /api/health` — ungated liveness probe.
 #[utoipa::path(
     get, path = "/health", tag = "console",
@@ -139,10 +160,16 @@ pub(crate) fn build(state: HostState, app_routers: Vec<(String, Router)>) -> Rou
         .routes(routes!(status::status))
         .routes(routes!(status::apps))
         .routes(routes!(config::get_config, config::put_config))
+        .routes(routes!(config::set_app_enabled))
         .routes(routes!(events::events))
         .routes(routes!(lark_apps::list, lark_apps::upsert))
         .routes(routes!(lark_apps::test))
         .routes(routes!(lark_apps::delete))
+        .routes(routes!(
+            console_auth::get_console_auth,
+            console_auth::put_console_auth,
+            console_auth::delete_console_auth
+        ))
         .routes(routes!(actions::dispatch));
     for (name, router) in app_routers {
         api = api.nest_service(&format!("/apps/{name}"), router);

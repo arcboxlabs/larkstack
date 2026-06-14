@@ -42,9 +42,23 @@ pub(crate) async fn status(State(s): State<HostState>) -> Json<StatusResponse> {
     responses((status = 200, description = "Registered app manifests", body = AppsResponse)),
 )]
 pub(crate) async fn apps(State(s): State<HostState>) -> Json<AppsResponse> {
+    let cfg = s.control.config();
     Json(AppsResponse {
-        apps: s.manifests.iter().map(AppManifest::from).collect(),
+        apps: s
+            .manifests
+            .iter()
+            .map(|m| AppManifest::new(m, app_enabled(&cfg, &m.name)))
+            .collect(),
     })
+}
+
+/// Read `[<name>].enabled` (default false) — mirrors the supervisor's own check,
+/// so the UI toggle reflects what the supervisor will actually do.
+fn app_enabled(config: &str, name: &str) -> bool {
+    toml::from_str::<toml::Value>(config)
+        .ok()
+        .and_then(|v| v.get(name)?.get("enabled")?.as_bool())
+        .unwrap_or(false)
 }
 
 // ---- wire types ------------------------------------------------------------
@@ -106,21 +120,25 @@ pub(crate) struct AppsResponse {
     apps: Vec<AppManifest>,
 }
 
-/// Wire mirror of `larkstack_core::Manifest`.
+/// Wire mirror of `larkstack_core::Manifest`, plus the live `enabled` flag read
+/// from config (the manifest itself is static; `enabled` is operator state).
 #[derive(Serialize, ToSchema)]
 pub(crate) struct AppManifest {
     name: String,
     kind: AppKind,
     description: String,
+    /// Whether the supervisor is configured to run this app (`[<name>].enabled`).
+    enabled: bool,
     actions: Vec<AppActionSpec>,
 }
 
-impl From<&CoreManifest> for AppManifest {
-    fn from(m: &CoreManifest) -> Self {
+impl AppManifest {
+    fn new(m: &CoreManifest, enabled: bool) -> Self {
         Self {
             name: m.name.clone(),
             kind: m.kind.into(),
             description: m.description.clone(),
+            enabled,
             actions: m.actions.iter().map(AppActionSpec::from).collect(),
         }
     }

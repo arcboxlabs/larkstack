@@ -2,6 +2,7 @@ import { Button } from "@base-ui/react/button";
 import { Tabs } from "@base-ui/react/tabs";
 import { Link, Outlet, useLocation } from "react-router";
 import { logout, useMe } from "../lib/auth";
+import { OpenConsoleBanner } from "./OpenConsoleBanner";
 
 const TABS = [
   { to: "/status", label: "Status" },
@@ -60,6 +61,7 @@ export function Layout() {
         )}
       </header>
       <main>
+        <OpenConsoleBanner />
         <Outlet />
       </main>
     </div>
