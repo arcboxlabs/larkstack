@@ -1,11 +1,12 @@
+use std::path::PathBuf;
 use std::process::ExitCode;
 use std::sync::Arc;
 
 use larkoapi::LarkBotClient;
-use larkstack_core::ControlPlane;
+use larkstack_core::{ControlPlane, SqliteStateStore, StateStore};
 use tracing::error;
 
-use standup::{AppConfig, date, flow};
+use standup::{AppConfig, date, flow, settings};
 
 #[tokio::main]
 async fn main() -> ExitCode {
@@ -23,18 +24,35 @@ async fn main() -> ExitCode {
         }
     };
 
+    // Standalone runs without the host, so it opens the per-App state store
+    // itself (the host hands one in for the console). Settings live there.
+    let data_dir =
+        PathBuf::from(std::env::var("CONSOLE_DATA_DIR").unwrap_or_else(|_| "data".to_string()));
+    if let Err(e) = std::fs::create_dir_all(&data_dir) {
+        error!("create data dir: {e}");
+        return ExitCode::FAILURE;
+    }
+    let store: Arc<dyn StateStore> = match SqliteStateStore::open(data_dir.join("state.db")) {
+        Ok(s) => Arc::new(s),
+        Err(e) => {
+            error!("open state store: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+
     let args: Vec<String> = std::env::args().skip(1).collect();
     let cmd = args.first().map(String::as_str).unwrap_or("run");
     let date_arg = args.get(1).map(String::as_str);
 
-    let today = date::today();
-    let tomorrow = date::tomorrow();
+    let s = settings::load(&store).await;
+    let today = date::today(s.timezone);
+    let tomorrow = date::tomorrow(s.timezone);
 
     match cmd {
         "run" => {
             let plane = ControlPlane::new();
             let handle = plane.handle("standup");
-            match standup::run(cfg, handle).await {
+            match standup::run(cfg, store, handle).await {
                 Ok(_) => ExitCode::SUCCESS,
                 Err(e) => {
                     error!("standup: {e:#}");
@@ -45,15 +63,15 @@ async fn main() -> ExitCode {
         "announce" | "ensure" | "remind" | "urgent" | "check" => {
             let bot = build_bot(&cfg);
             let date = match cmd {
-                "announce" | "ensure" => date::resolve(date_arg, tomorrow),
-                _ => date::resolve(date_arg, today),
+                "announce" | "ensure" => date::resolve(date_arg, tomorrow, s.timezone),
+                _ => date::resolve(date_arg, today, s.timezone),
             };
             let result = match cmd {
-                "announce" => flow::announce(&cfg.standup, &bot, date).await,
-                "ensure" => flow::ensure(&cfg.standup, &bot, date).await,
-                "remind" => flow::remind(&cfg.standup, &bot, date, false).await,
-                "urgent" => flow::remind(&cfg.standup, &bot, date, true).await,
-                "check" => flow::check(&cfg.standup, &bot, date).await,
+                "announce" => flow::announce(&cfg.standup, &s, &bot, date).await,
+                "ensure" => flow::ensure(&cfg.standup, &s, &bot, date).await,
+                "remind" => flow::remind(&cfg.standup, &s, &bot, date, false).await,
+                "urgent" => flow::remind(&cfg.standup, &s, &bot, date, true).await,
+                "check" => flow::check(&cfg.standup, &s, &bot, date).await,
                 _ => unreachable!(),
             };
             match result {
@@ -70,8 +88,8 @@ async fn main() -> ExitCode {
                 return ExitCode::from(2);
             };
             let bot = build_bot(&cfg);
-            let date = date::resolve(args.get(2).map(String::as_str), today);
-            match flow::urgent_one(&cfg.standup, &bot, date, uid).await {
+            let date = date::resolve(args.get(2).map(String::as_str), today, s.timezone);
+            match flow::urgent_one(&cfg.standup, &s, &bot, date, uid).await {
                 Ok(()) => ExitCode::SUCCESS,
                 Err(e) => {
                     error!("urgent-user failed: {e}");

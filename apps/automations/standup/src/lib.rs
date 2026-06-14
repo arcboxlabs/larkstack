@@ -11,7 +11,8 @@ pub mod date;
 pub mod flow;
 pub mod lark;
 pub mod runtime;
-pub mod templates;
+pub mod settings;
+pub mod template;
 pub mod trigger;
 
 pub use config::{AppConfig, LarkConfig, StandupConfig};

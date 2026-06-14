@@ -6,29 +6,32 @@ use std::collections::HashMap;
 
 use chrono::NaiveDate;
 use larkoapi::{ChatMember, LarkBotClient};
+use minijinja::context;
 use serde_json::{Value, json};
 use tracing::{info, warn};
 
 use crate::config::StandupConfig;
+use crate::settings::Settings;
+use crate::template;
 
-const HEADER_DONE: &str = "✅ 昨日完成";
-const HEADER_PLAN: &str = "🎯 今日计划";
-const HEADER_BLOCK: &str = "🚫 阻塞";
+/// The standup table is structurally fixed: a name column plus the three content
+/// columns (done / plan / block). Only the wording and widths are admin-tunable.
 const COL_SIZE: usize = 4;
-const COLUMN_WIDTH: [i64; COL_SIZE] = [120, 300, 300, 240];
 
 pub struct StandupDoc {
     pub doc_id: String,
     pub url: String,
 }
 
-fn document_title(date: NaiveDate) -> String {
-    format!("Daily Scrum - {}", date.format("%Y-%m-%d"))
+fn document_title(settings: &Settings, date: NaiveDate) -> String {
+    let date_str = date.format("%Y-%m-%d").to_string();
+    template::render(&settings.doc_title, context! { date => date_str })
 }
 
 pub async fn ensure_document_for_date(
     client: &LarkBotClient,
     cfg: &StandupConfig,
+    settings: &Settings,
     date: NaiveDate,
 ) -> Result<StandupDoc, String> {
     let folder = cfg
@@ -36,7 +39,7 @@ pub async fn ensure_document_for_date(
         .as_deref()
         .ok_or("STANDUP_FOLDER_TOKEN not set")?;
     let chat_id = cfg.chat_id.as_deref().ok_or("STANDUP_CHAT_ID not set")?;
-    let title = document_title(date);
+    let title = document_title(settings, date);
 
     let files = client.list_files_in_folder(folder).await?;
     if let Some(existing) = files
@@ -56,7 +59,7 @@ pub async fn ensure_document_for_date(
 
     let doc_id = client.create_docx_in_folder(folder, &title).await?;
     info!("standup: created doc {doc_id} for {date}");
-    populate_standup_table(client, &doc_id, &members).await?;
+    populate_standup_table(client, settings, &doc_id, &members).await?;
     if let Err(e) = client.share_file_with_chat(&doc_id, "docx", chat_id).await {
         warn!("standup: share doc {doc_id} to chat failed: {e}");
     }
@@ -73,6 +76,7 @@ pub async fn ensure_document_for_date(
 
 async fn populate_standup_table(
     client: &LarkBotClient,
+    settings: &Settings,
     doc_id: &str,
     members: &[ChatMember],
 ) -> Result<(), String> {
@@ -83,7 +87,7 @@ async fn populate_standup_table(
             "property": {
                 "row_size": row_size,
                 "column_size": COL_SIZE as i64,
-                "column_width": COLUMN_WIDTH,
+                "column_width": column_widths(settings),
                 "header_row": true
             }
         }
@@ -114,7 +118,12 @@ async fn populate_standup_table(
 
     let cell_to_text = cell_text_map(&blocks);
 
-    let headers = ["", HEADER_DONE, HEADER_PLAN, HEADER_BLOCK];
+    let headers = [
+        "",
+        settings.header_done.as_str(),
+        settings.header_plan.as_str(),
+        settings.header_block.as_str(),
+    ];
     let mut requests: Vec<Value> = Vec::new();
     for (col, header) in headers.iter().enumerate() {
         if header.is_empty() {
@@ -214,6 +223,15 @@ pub async fn find_missing_user_ids(
         }
     }
     Ok(missing)
+}
+
+/// The configured widths normalized to exactly [`COL_SIZE`] columns — padding
+/// short lists with the last width, truncating long ones.
+fn column_widths(settings: &Settings) -> Vec<i64> {
+    let pad = settings.column_widths.last().copied().unwrap_or(240);
+    let mut w = settings.column_widths.clone();
+    w.resize(COL_SIZE, pad);
+    w
 }
 
 fn cell_text_map(blocks: &[Value]) -> HashMap<String, String> {

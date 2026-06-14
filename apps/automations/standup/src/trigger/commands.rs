@@ -4,22 +4,25 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use askama::Template;
 use async_trait::async_trait;
 use chrono::NaiveDate;
 use larkoapi::{LarkBotClient, WsEventHandler};
+use larkstack_core::StateStore;
+use minijinja::context;
 use serde_json::Value;
 use tracing::{info, warn};
 
 use crate::config::StandupConfig;
 use crate::lark::doc;
-use crate::templates::{CheckTemplate, HelpTemplate};
+use crate::settings::{self, Settings};
+use crate::template;
 use crate::{date, flow};
 
 pub struct CommandBot {
     pub cfg: Arc<StandupConfig>,
     pub client: Arc<LarkBotClient>,
     pub bot_open_id: String,
+    pub store: Arc<dyn StateStore>,
 }
 
 #[async_trait]
@@ -117,8 +120,9 @@ impl CommandBot {
         let tokens: Vec<&str> = cmd_text.split_whitespace().collect();
         let cmd = tokens.first().copied().unwrap_or("help");
         let second = tokens.get(1).copied();
-        let today = date::today();
-        let tomorrow = date::tomorrow();
+        let s = settings::load(&self.store).await;
+        let today = date::today(s.timezone);
+        let tomorrow = date::tomorrow(s.timezone);
 
         // non-bot mentioned open_ids (for `urgent @user`)
         let mentioned_users: Vec<String> = mentions
@@ -132,49 +136,49 @@ impl CommandBot {
             .collect();
 
         match cmd {
-            "help" | "/help" | "h" | "?" => Ok(render_help()),
+            "help" | "/help" | "h" | "?" => Ok(render_help(&s)),
             "check" | "/check" => {
-                let date = date::resolve(second, today);
-                self.do_check(date).await
+                let date = date::resolve(second, today, s.timezone);
+                self.do_check(&s, date).await
             }
             "ensure" | "/ensure" => {
-                let date = date::resolve(second, tomorrow);
+                let date = date::resolve(second, tomorrow, s.timezone);
                 let standup_doc =
-                    doc::ensure_document_for_date(&self.client, &self.cfg, date).await?;
+                    doc::ensure_document_for_date(&self.client, &self.cfg, &s, date).await?;
                 Ok(format!("✅ {date} 文档已就位\n{}", standup_doc.url))
             }
             "announce" | "/announce" => {
-                let date = date::resolve(second, tomorrow);
-                flow::announce(&self.cfg, &self.client, date).await?;
+                let date = date::resolve(second, tomorrow, s.timezone);
+                flow::announce(&self.cfg, &s, &self.client, date).await?;
                 Ok(format!("✅ {date} 公告已发群"))
             }
             "remind" | "/remind" => {
-                let date = date::resolve(second, today);
-                flow::remind(&self.cfg, &self.client, date, false).await?;
+                let date = date::resolve(second, today, s.timezone);
+                flow::remind(&self.cfg, &s, &self.client, date, false).await?;
                 Ok(format!("✅ {date} 提醒已发送(未填者)"))
             }
             "urgent" | "/urgent" => {
                 if !mentioned_users.is_empty() {
                     let mut out = String::new();
                     for oid in &mentioned_users {
-                        match flow::urgent_one(&self.cfg, &self.client, today, oid).await {
+                        match flow::urgent_one(&self.cfg, &s, &self.client, today, oid).await {
                             Ok(()) => out.push_str(&format!("✅ 已加急 → {oid}\n")),
                             Err(e) => out.push_str(&format!("❌ {oid}: {e}\n")),
                         }
                     }
                     Ok(out.trim_end().to_string())
                 } else {
-                    let date = date::resolve(second, today);
-                    flow::remind(&self.cfg, &self.client, date, true).await?;
+                    let date = date::resolve(second, today, s.timezone);
+                    flow::remind(&self.cfg, &s, &self.client, date, true).await?;
                     Ok(format!("✅ {date} 加急提醒已发出(未填者)"))
                 }
             }
-            other => Err(format!("未知命令: {other}\n\n{}", render_help())),
+            other => Err(format!("未知命令: {other}\n\n{}", render_help(&s))),
         }
     }
 
-    async fn do_check(&self, date: NaiveDate) -> Result<String, String> {
-        let standup_doc = doc::ensure_document_for_date(&self.client, &self.cfg, date).await?;
+    async fn do_check(&self, s: &Settings, date: NaiveDate) -> Result<String, String> {
+        let standup_doc = doc::ensure_document_for_date(&self.client, &self.cfg, s, date).await?;
         let missing = doc::find_missing_user_ids(&self.client, &standup_doc.doc_id).await?;
         let mut name_of: HashMap<String, String> = HashMap::new();
         if let Some(chat_id) = self.cfg.chat_id.as_deref()
@@ -191,18 +195,13 @@ impl CommandBot {
                 if name.is_empty() { uid.clone() } else { name }
             })
             .collect();
-        CheckTemplate {
-            date: &date.to_string(),
-            url: &standup_doc.url,
-            missing: rows,
-        }
-        .render()
-        .map_err(|e| format!("render check: {e}"))
+        Ok(template::render(
+            &s.check_template,
+            context! { date => date.to_string(), url => standup_doc.url, missing => rows },
+        ))
     }
 }
 
-fn render_help() -> String {
-    HelpTemplate
-        .render()
-        .unwrap_or_else(|e| format!("help render failed: {e}"))
+fn render_help(s: &Settings) -> String {
+    template::render(&s.help_template, context! {})
 }

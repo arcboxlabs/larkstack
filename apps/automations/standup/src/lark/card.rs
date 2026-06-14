@@ -1,31 +1,27 @@
-//! Announce + reminder card builders. The announce card's wording adapts to
-//! how far off `date` is (today / tomorrow / further out).
+//! Announce + reminder card builders. Title/body wording comes from the
+//! admin-editable [`Settings`] templates; only the card colors are fixed
+//! (announce = blue, reminder = orange / red when urgent).
 
 use chrono::NaiveDate;
 use larkoapi::LarkCard;
+use minijinja::context;
 use serde_json::{Value, json};
 
-use crate::date;
+use crate::settings::Settings;
+use crate::{date, template};
 
-pub fn build_announce_card(doc_url: &str, date: NaiveDate) -> LarkCard {
-    let (title_prefix, body) = match (date - date::today()).num_days() {
-        0 => (
-            "今日",
-            "Standup 文档已就位,如未填写请立即补上。".to_string(),
-        ),
-        1 => (
-            "明日",
-            "Standup 文档已就位。请在 **明早 10:30 之前** 完成填写。".to_string(),
-        ),
-        n if n > 0 => ("", format!("Standup 文档已就位 ({n} 天后),请按时填写。")),
-        _ => ("", "Standup 文档链接见下。".to_string()),
-    };
-    let title = if title_prefix.is_empty() {
-        format!("Daily Standup · {}", date.format("%Y-%m-%d"))
-    } else {
-        format!("{title_prefix} Daily Standup · {}", date.format("%Y-%m-%d"))
-    };
-    LarkCard::new("blue", title)
+pub fn build_announce_card(settings: &Settings, doc_url: &str, date: NaiveDate) -> LarkCard {
+    let days_until = (date - date::today(settings.timezone)).num_days();
+    let date_str = date.format("%Y-%m-%d").to_string();
+    let title = template::render(
+        &settings.announce_title,
+        context! { date => date_str, days_until },
+    );
+    let body = template::render(
+        &settings.announce_body,
+        context! { date => date_str, days_until, url => doc_url },
+    );
+    LarkCard::new("blue", title.trim())
         .push(json!({
             "tag": "div",
             "text": {"tag": "lark_md", "content": body}
@@ -33,21 +29,11 @@ pub fn build_announce_card(doc_url: &str, date: NaiveDate) -> LarkCard {
         .push(open_doc_action(doc_url))
 }
 
-pub fn build_reminder_card(doc_url: &str, urgent: bool) -> LarkCard {
-    let (template, title, body) = if urgent {
-        (
-            "red",
-            "⚠️ Daily Standup 最后提醒",
-            "Standup 马上开始,请立刻填写你的那一行。",
-        )
-    } else {
-        (
-            "orange",
-            "📝 Daily Standup 提醒",
-            "你还没填写今天的 Daily Standup,请尽快完成。",
-        )
-    };
-    LarkCard::new(template, title)
+pub fn build_reminder_card(settings: &Settings, doc_url: &str, urgent: bool) -> LarkCard {
+    let color = if urgent { "red" } else { "orange" };
+    let title = template::render(&settings.reminder_title, context! { urgent });
+    let body = template::render(&settings.reminder_body, context! { urgent, url => doc_url });
+    LarkCard::new(color, title.trim())
         .push(json!({
             "tag": "div",
             "text": {"tag": "lark_md", "content": body}

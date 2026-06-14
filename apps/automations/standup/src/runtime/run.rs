@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use larkoapi::{LarkBotClient, WsEventHandler, ws};
-use larkstack_core::ControlHandle;
+use larkstack_core::{ControlHandle, StateStore};
 use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
 
@@ -25,10 +25,13 @@ pub fn build_bot(cfg: &AppConfig) -> anyhow::Result<Arc<LarkBotClient>> {
 
 /// Spawn the WS command handler (best-effort) and run the scheduler until
 /// `cancel` fires. Shared by the embedded App instance and the standalone
-/// binary. The WS task is tied to `cancel` so a restart doesn't leak it.
+/// binary. Both the WS task and the scheduler honor `cancel` so a restart
+/// doesn't leak them. The `store` backs the live settings the bot + scheduler
+/// read each pass.
 pub async fn serve_with_bot(
     cfg: &AppConfig,
     bot: Arc<LarkBotClient>,
+    store: Arc<dyn StateStore>,
     cancel: CancellationToken,
 ) -> anyhow::Result<()> {
     match bot.bot_open_id().await {
@@ -38,6 +41,7 @@ pub async fn serve_with_bot(
                 cfg: Arc::new(cfg.standup.clone()),
                 client: Arc::clone(&bot),
                 bot_open_id,
+                store: Arc::clone(&store),
             });
             let base_url = cfg.lark.base_url.clone();
             let app_id = cfg.lark.app_id.clone();
@@ -54,22 +58,29 @@ pub async fn serve_with_bot(
         Err(e) => warn!("standup: bot_open_id lookup failed ({e}); command bot disabled"),
     }
 
-    tokio::select! {
-        _ = scheduler::run(cfg.standup.clone(), bot) => {}
-        _ = cancel.cancelled() => info!("standup: scheduler stopped"),
-    }
+    scheduler::run(cfg.standup.clone(), store, bot, cancel).await;
+    info!("standup: scheduler stopped");
     Ok(())
 }
 
 /// Standalone runner with its own [`ControlHandle`].
-pub async fn run_with_bot(cfg: AppConfig, bot: Arc<LarkBotClient>, handle: ControlHandle) {
+pub async fn run_with_bot(
+    cfg: AppConfig,
+    bot: Arc<LarkBotClient>,
+    store: Arc<dyn StateStore>,
+    handle: ControlHandle,
+) {
     handle.running().await;
-    let _ = serve_with_bot(&cfg, bot, CancellationToken::new()).await;
+    let _ = serve_with_bot(&cfg, bot, store, CancellationToken::new()).await;
 }
 
 /// Convenience: build + run, for the standalone binary.
-pub async fn run(cfg: AppConfig, handle: ControlHandle) -> anyhow::Result<()> {
+pub async fn run(
+    cfg: AppConfig,
+    store: Arc<dyn StateStore>,
+    handle: ControlHandle,
+) -> anyhow::Result<()> {
     let bot = build_bot(&cfg)?;
-    run_with_bot(cfg, bot, handle).await;
+    run_with_bot(cfg, bot, store, handle).await;
     Ok(())
 }

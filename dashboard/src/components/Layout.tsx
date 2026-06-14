@@ -9,6 +9,7 @@ const TABS = [
   { to: "/actions", label: "Actions" },
   { to: "/lark-apps", label: "Lark Apps" },
   { to: "/linear", label: "Linear" },
+  { to: "/standup", label: "Standup" },
   { to: "/config", label: "Config" },
   { to: "/events", label: "Events" },
 ] as const;

@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use larkoapi::LarkBotClient;
-use larkstack_core::{ActionSpec, App, AppServices, Instance, Kind, Manifest};
+use larkstack_core::{ActionSpec, App, AppServices, Instance, Kind, Manifest, StateStore};
 use serde_json::{Value, json};
 use tokio_util::sync::CancellationToken;
 
@@ -45,26 +45,36 @@ impl App for StandupApp {
     async fn build(
         &self,
         config: &str,
-        _services: AppServices,
+        services: AppServices,
     ) -> anyhow::Result<Arc<dyn Instance>> {
         let cfg = AppConfig::from_toml(config).map_err(|e| anyhow::anyhow!("config: {e}"))?;
         let bot = build_bot(&cfg)?;
-        Ok(Arc::new(StandupInstance { cfg, bot }))
+        Ok(Arc::new(StandupInstance {
+            cfg,
+            bot,
+            store: services.state,
+        }))
+    }
+
+    fn routes(&self, services: &AppServices) -> Option<axum::Router> {
+        Some(crate::settings::router(services.state.clone()))
     }
 }
 
 struct StandupInstance {
     cfg: AppConfig,
     bot: Arc<LarkBotClient>,
+    store: Arc<dyn StateStore>,
 }
 
 #[async_trait]
 impl Instance for StandupInstance {
     async fn run(&self, cancel: CancellationToken) -> anyhow::Result<()> {
-        serve_with_bot(&self.cfg, self.bot.clone(), cancel).await
+        serve_with_bot(&self.cfg, self.bot.clone(), self.store.clone(), cancel).await
     }
 
     async fn handle_action(&self, action: &str, params: Value) -> anyhow::Result<String> {
-        crate::trigger::actions::handle(&self.cfg.standup, &self.bot, action, params).await
+        crate::trigger::actions::handle(&self.cfg.standup, &self.store, &self.bot, action, params)
+            .await
     }
 }

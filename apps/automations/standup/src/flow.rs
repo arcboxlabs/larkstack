@@ -1,27 +1,30 @@
 //! Per-job orchestration: ensure the daily doc exists, find who hasn't filled
 //! it, and fan out the announce/reminder/urgent cards. The Lark mechanics live
 //! in [`crate::lark`]; this module is the high-level standup operations the CLI,
-//! console actions, scheduler, and chat bot all dispatch to.
+//! console actions, scheduler, and chat bot all dispatch to. Behavior (wording,
+//! templates, timezone) comes from the admin-editable [`Settings`].
 
 use std::collections::HashMap;
 
-use askama::Template;
 use chrono::NaiveDate;
 use larkoapi::LarkBotClient;
+use minijinja::context;
 use tracing::{error, info};
 
 use crate::config::StandupConfig;
 use crate::lark::card::{build_announce_card, build_reminder_card};
 use crate::lark::doc::{ensure_document_for_date, find_missing_user_ids};
-use crate::templates::CheckTemplate;
+use crate::settings::Settings;
+use crate::template;
 
 /// Build the doc (if missing) + share with chat. No chat announcement card.
 pub async fn ensure(
     cfg: &StandupConfig,
+    settings: &Settings,
     client: &LarkBotClient,
     date: NaiveDate,
 ) -> Result<(), String> {
-    let doc = ensure_document_for_date(client, cfg, date).await?;
+    let doc = ensure_document_for_date(client, cfg, settings, date).await?;
     info!("standup: ensured {date} doc={} url={}", doc.doc_id, doc.url);
     println!("{date}\t{}\t{}", doc.doc_id, doc.url);
     Ok(())
@@ -30,12 +33,13 @@ pub async fn ensure(
 /// Ensure doc + send announcement card to the chat.
 pub async fn announce(
     cfg: &StandupConfig,
+    settings: &Settings,
     client: &LarkBotClient,
     date: NaiveDate,
 ) -> Result<(), String> {
     let chat_id = cfg.chat_id.as_deref().ok_or("chat_id missing")?;
-    let doc = ensure_document_for_date(client, cfg, date).await?;
-    let card = build_announce_card(&doc.url, date);
+    let doc = ensure_document_for_date(client, cfg, settings, date).await?;
+    let card = build_announce_card(settings, &doc.url, date);
     client
         .send_interactive_returning_id(chat_id, "chat_id", &card)
         .await?;
@@ -47,11 +51,12 @@ pub async fn announce(
 /// the in-app urgent escalation on the same message.
 pub async fn remind(
     cfg: &StandupConfig,
+    settings: &Settings,
     client: &LarkBotClient,
     date: NaiveDate,
     urgent: bool,
 ) -> Result<(), String> {
-    let doc = ensure_document_for_date(client, cfg, date).await?;
+    let doc = ensure_document_for_date(client, cfg, settings, date).await?;
     let missing = find_missing_user_ids(client, &doc.doc_id).await?;
     if missing.is_empty() {
         info!("standup: {date} fully filled, skipping reminder (urgent={urgent})");
@@ -61,7 +66,7 @@ pub async fn remind(
         "standup: {date} missing {} user(s), urgent={urgent}",
         missing.len()
     );
-    let card = build_reminder_card(&doc.url, urgent);
+    let card = build_reminder_card(settings, &doc.url, urgent);
     let mut delivered: Vec<(String, String)> = Vec::new();
     for uid in &missing {
         match client
@@ -86,12 +91,13 @@ pub async fn remind(
 /// Useful for manual testing and ad-hoc escalation.
 pub async fn urgent_one(
     cfg: &StandupConfig,
+    settings: &Settings,
     client: &LarkBotClient,
     date: NaiveDate,
     open_id: &str,
 ) -> Result<(), String> {
-    let doc = ensure_document_for_date(client, cfg, date).await?;
-    let card = build_reminder_card(&doc.url, true);
+    let doc = ensure_document_for_date(client, cfg, settings, date).await?;
+    let card = build_reminder_card(settings, &doc.url, true);
     let mid = client
         .send_interactive_returning_id(open_id, "open_id", &card)
         .await?;
@@ -107,10 +113,11 @@ pub async fn urgent_one(
 /// Read-only check: print who hasn't filled the doc for `date`.
 pub async fn check(
     cfg: &StandupConfig,
+    settings: &Settings,
     client: &LarkBotClient,
     date: NaiveDate,
 ) -> Result<(), String> {
-    let doc = ensure_document_for_date(client, cfg, date).await?;
+    let doc = ensure_document_for_date(client, cfg, settings, date).await?;
     let missing = find_missing_user_ids(client, &doc.doc_id).await?;
 
     let mut name_of: HashMap<String, String> = HashMap::new();
@@ -133,13 +140,10 @@ pub async fn check(
             }
         })
         .collect();
-    let rendered = CheckTemplate {
-        date: &date.to_string(),
-        url: &doc.url,
-        missing: rows,
-    }
-    .render()
-    .map_err(|e| format!("render check: {e}"))?;
+    let rendered = template::render(
+        &settings.check_template,
+        context! { date => date.to_string(), url => doc.url, missing => rows },
+    );
     println!("doc_id:  {}", doc.doc_id);
     print!("{rendered}");
     Ok(())
