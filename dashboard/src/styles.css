@@ -46,6 +46,7 @@ body {
   border-radius: 999px;
   background: transparent;
   color: inherit;
+  text-decoration: none;
   cursor: pointer;
   opacity: 0.7;
 }
@@ -54,7 +55,7 @@ body {
   opacity: 1;
 }
 
-.tab[aria-selected="true"] {
+.tab.active {
   background: color-mix(in srgb, canvastext 10%, transparent);
   opacity: 1;
 }
@@ -179,9 +180,14 @@ th {
   font-size: 0.85rem;
 }
 
-.filters select {
-  font: inherit;
-  padding: 0.15rem 0.35rem;
+.filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.filter-label {
+  opacity: 0.7;
 }
 
 .conn {
@@ -328,19 +334,24 @@ th {
   border-top: 1px dashed color-mix(in srgb, canvastext 12%, transparent);
 }
 
-.action-fields label {
-  display: grid;
-  grid-template-columns: 14rem 1fr;
-  gap: 0.5rem;
-  align-items: center;
-  font-size: 0.8rem;
-}
-
 .action-fields .req {
   color: #ef4444;
 }
 
-.action-fields input {
+/* Base UI Field row: label + control on one line, error beneath the control. */
+.field {
+  display: grid;
+  grid-template-columns: 14rem 1fr;
+  gap: 0.3rem 0.5rem;
+  align-items: center;
+  font-size: 0.8rem;
+}
+
+.field-label {
+  font-size: 0.8rem;
+}
+
+.field-input {
   font: inherit;
   font-size: 0.85rem;
   padding: 0.3rem 0.5rem;
@@ -348,6 +359,21 @@ th {
   border-radius: 4px;
   background: canvas;
   color: canvastext;
+}
+
+.field-input[data-invalid] {
+  border-color: #ef4444;
+}
+
+.field-input[readonly] {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.field-error {
+  grid-column: 2;
+  font-size: 0.78rem;
+  color: #ef4444;
 }
 
 .action-btn {
@@ -467,4 +493,106 @@ button.signout {
   background: transparent;
   color: inherit;
   cursor: pointer;
+}
+
+/* Base UI Select (Events filters) */
+.select-trigger {
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 0.2rem 0.5rem;
+  border: 1px solid color-mix(in srgb, canvastext 25%, transparent);
+  border-radius: 4px;
+  background: canvas;
+  color: inherit;
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+  min-width: 6rem;
+  cursor: pointer;
+}
+
+.select-trigger[data-popup-open] {
+  border-color: currentColor;
+}
+
+.select-icon {
+  font-size: 0.7rem;
+  opacity: 0.6;
+}
+
+.select-popup {
+  background: canvas;
+  color: canvastext;
+  border: 1px solid color-mix(in srgb, canvastext 20%, transparent);
+  border-radius: 6px;
+  padding: 0.25rem;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.2);
+  min-width: 7rem;
+  z-index: 10;
+}
+
+.select-item {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.25rem 0.5rem 0.25rem 0.35rem;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  user-select: none;
+  outline: none;
+}
+
+.select-item[data-highlighted] {
+  background: color-mix(in srgb, canvastext 12%, transparent);
+}
+
+.select-item-indicator {
+  width: 1rem;
+  display: inline-flex;
+  justify-content: center;
+  font-size: 0.75rem;
+}
+
+/* Base UI AlertDialog (delete confirmation) */
+.dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 20;
+}
+
+.dialog-popup {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: canvas;
+  color: canvastext;
+  border: 1px solid color-mix(in srgb, canvastext 20%, transparent);
+  border-radius: 8px;
+  padding: 1.25rem 1.5rem;
+  max-width: 26rem;
+  width: calc(100vw - 2rem);
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.3);
+  z-index: 21;
+}
+
+.dialog-title {
+  font-size: 1rem;
+  margin: 0 0 0.5rem;
+}
+
+.dialog-desc {
+  font-size: 0.85rem;
+  opacity: 0.8;
+  margin: 0 0 1.25rem;
+  word-break: break-word;
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
 }

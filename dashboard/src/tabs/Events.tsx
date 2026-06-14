@@ -1,4 +1,7 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
+import type { ReactNode } from "react";
+import { Select } from "@base-ui/react/select";
+import { useLocalStorage } from "foxact/use-local-storage";
 import { useEvents, type Level } from "../lib/useEvents";
 
 const LEVEL_ORDER: Record<Level, number> = {
@@ -17,10 +20,76 @@ const LEVEL_COLORS: Record<Level, string> = {
   error: "#ef4444",
 };
 
+const LEVELS: ReadonlyArray<{ value: Level; label: string }> = [
+  { value: "trace", label: "trace+" },
+  { value: "debug", label: "debug+" },
+  { value: "info", label: "info+" },
+  { value: "warn", label: "warn+" },
+  { value: "error", label: "error" },
+];
+
+const LEVEL_LABEL: Record<Level, string> = {
+  trace: "trace+",
+  debug: "debug+",
+  info: "info+",
+  warn: "warn+",
+  error: "error",
+};
+
+function FilterSelect({
+  value,
+  onChange,
+  children,
+  display,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  children: ReactNode;
+  display: (v: string) => string;
+}) {
+  return (
+    <Select.Root
+      modal={false}
+      value={value}
+      onValueChange={(v) => onChange((v as string | null) ?? "")}
+    >
+      <Select.Trigger className="select-trigger">
+        <Select.Value>{(v) => display(v as string)}</Select.Value>
+        <Select.Icon className="select-icon">▾</Select.Icon>
+      </Select.Trigger>
+      <Select.Portal>
+        <Select.Positioner sideOffset={4} align="start">
+          <Select.Popup className="select-popup">{children}</Select.Popup>
+        </Select.Positioner>
+      </Select.Portal>
+    </Select.Root>
+  );
+}
+
+function FilterItem({ value, label }: { value: string; label: string }) {
+  return (
+    <Select.Item value={value} className="select-item">
+      <Select.ItemIndicator className="select-item-indicator">
+        ✓
+      </Select.ItemIndicator>
+      <Select.ItemText>{label}</Select.ItemText>
+    </Select.Item>
+  );
+}
+
 export function Events() {
   const { events, connected, laggedCount } = useEvents();
-  const [minLevel, setMinLevel] = useState<Level>("info");
-  const [subsystem, setSubsystem] = useState<string>("");
+  // Filters persist across reloads (foxact localStorage state, raw strings).
+  const [minLevel, setMinLevel] = useLocalStorage<Level>(
+    "larkstack.events.level",
+    "info",
+    { raw: true },
+  );
+  const [subsystem, setSubsystem] = useLocalStorage<string>(
+    "larkstack.events.subsystem",
+    "",
+    { raw: true },
+  );
 
   const subsystems = useMemo(() => {
     const set = new Set<string>();
@@ -44,39 +113,35 @@ export function Events() {
       <header className="events-header">
         <h2>Events</h2>
         <div className="filters">
-          <label>
-            level{" "}
-            <select
+          <div className="filter">
+            <span className="filter-label">level</span>
+            <FilterSelect
               value={minLevel}
-              onChange={(e) => setMinLevel(e.target.value as Level)}
+              onChange={(v) => setMinLevel((v || "info") as Level)}
+              display={(v) => LEVEL_LABEL[v as Level] ?? v}
             >
-              <option value="trace">trace+</option>
-              <option value="debug">debug+</option>
-              <option value="info">info+</option>
-              <option value="warn">warn+</option>
-              <option value="error">error</option>
-            </select>
-          </label>
-          <label>
-            subsystem{" "}
-            <select
-              value={subsystem}
-              onChange={(e) => setSubsystem(e.target.value)}
-            >
-              <option value="">all</option>
-              {subsystems.map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
+              {LEVELS.map((l) => (
+                <FilterItem key={l.value} value={l.value} label={l.label} />
               ))}
-            </select>
-          </label>
+            </FilterSelect>
+          </div>
+          <div className="filter">
+            <span className="filter-label">subsystem</span>
+            <FilterSelect
+              value={subsystem}
+              onChange={setSubsystem}
+              display={(v) => v || "all"}
+            >
+              <FilterItem value="" label="all" />
+              {subsystems.map((s) => (
+                <FilterItem key={s} value={s} label={s} />
+              ))}
+            </FilterSelect>
+          </div>
           <span className={`conn ${connected ? "ok" : "down"}`}>
             {connected ? "● live" : "○ reconnecting"}
           </span>
-          {laggedCount > 0 && (
-            <span className="lag">dropped {laggedCount}</span>
-          )}
+          {laggedCount > 0 && <span className="lag">dropped {laggedCount}</span>}
         </div>
       </header>
       <ul className="log">
@@ -86,10 +151,7 @@ export function Events() {
             <span className="ts muted">
               {new Date(e.timestamp).toLocaleTimeString()}
             </span>
-            <span
-              className="level"
-              style={{ color: LEVEL_COLORS[e.level] }}
-            >
+            <span className="level" style={{ color: LEVEL_COLORS[e.level] }}>
               {e.level.toUpperCase()}
             </span>
             {e.subsystem && <span className="subsys">[{e.subsystem}]</span>}

@@ -1,5 +1,10 @@
 import { useState } from "react";
-import { api } from "../lib/auth";
+import { Button } from "@base-ui/react/button";
+import { Field } from "@base-ui/react/field";
+import { useForm } from "react-hook-form";
+import { Link } from "react-router";
+import useSWRMutation from "swr/mutation";
+import { errMessage, mutateRequest } from "../lib/http";
 
 interface ActionParam {
   name: string;
@@ -51,74 +56,102 @@ const CATALOG: Record<string, Action[]> = {
   ],
 };
 
-type Result =
-  | { kind: "idle" }
-  | { kind: "running" }
-  | { kind: "ok"; message: string }
-  | { kind: "error"; message: string };
+type RunState = { tone: "ok" | "error"; text: string } | null;
+
+function ActionCard({ subsystem, action }: { subsystem: string; action: Action }) {
+  const params = action.params ?? [];
+  const defaults: Record<string, string> = {};
+  for (const p of params) defaults[p.name] = "";
+
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+  } = useForm<Record<string, string>>({ defaultValues: defaults });
+  const [result, setResult] = useState<RunState>(null);
+
+  const fire = useSWRMutation(
+    `action:${subsystem}/${action.name}`,
+    (_key: string, { arg }: { arg: Record<string, string> | null }) =>
+      mutateRequest(`/api/actions/${subsystem}/${action.name}`, { json: arg }),
+    { revalidate: false, populateCache: false },
+  );
+
+  const onRun = handleSubmit(async (values) => {
+    setResult(null);
+    // Send required fields always; drop empty optionals so JSON carries only
+    // real values (and `null` when nothing is left).
+    const required = new Set(params.filter((p) => p.required).map((p) => p.name));
+    const body: Record<string, string> = {};
+    for (const [k, v] of Object.entries(values)) {
+      const trimmed = v.trim();
+      if (required.has(k) || trimmed) body[k] = trimmed;
+    }
+    try {
+      await fire.trigger(Object.keys(body).length ? body : null);
+      setResult({ tone: "ok", text: "dispatched" });
+      window.setTimeout(() => setResult(null), 2500);
+    } catch (e) {
+      setResult({ tone: "error", text: errMessage(e) });
+    }
+  });
+
+  return (
+    <div className="action-card">
+      <div className="action-card-head">
+        <div>
+          <code className="action-name">{action.name}</code>
+          <div className="muted help-text">{action.description}</div>
+        </div>
+        <Button
+          className={`action-btn ${result?.tone ?? ""}`}
+          type="button"
+          onClick={onRun}
+          disabled={fire.isMutating}
+        >
+          {fire.isMutating ? "…" : "Run"}
+        </Button>
+      </div>
+      {params.length > 0 && (
+        <div className="action-fields">
+          {params.map((p) => (
+            <Field.Root
+              key={p.name}
+              className="field"
+              invalid={!!errors[p.name]}
+            >
+              <Field.Label className="field-label">
+                {p.label}
+                {p.required && <span className="req"> *</span>}
+              </Field.Label>
+              <Field.Control
+                className="field-input"
+                placeholder={p.placeholder}
+                {...register(p.name, p.required ? { required: `${p.name} is required` } : {})}
+              />
+              {errors[p.name] && (
+                <Field.Error className="field-error" match>
+                  {errors[p.name]?.message}
+                </Field.Error>
+              )}
+            </Field.Root>
+          ))}
+        </div>
+      )}
+      {result && (
+        <div className={`action-result ${result.tone}`}>{result.text}</div>
+      )}
+    </div>
+  );
+}
 
 export function Actions() {
-  const [results, setResults] = useState<Record<string, Result>>({});
-  const [forms, setForms] = useState<Record<string, Record<string, string>>>({});
-
-  const setFormField = (key: string, name: string, value: string) =>
-    setForms((f) => ({ ...f, [key]: { ...(f[key] ?? {}), [name]: value } }));
-
-  const invoke = async (subsystem: string, action: Action) => {
-    const key = `${subsystem}/${action.name}`;
-    const params = forms[key] ?? {};
-    const missing = (action.params ?? []).filter(
-      (p) => p.required && !params[p.name]?.trim(),
-    );
-    if (missing.length) {
-      setResults((r) => ({
-        ...r,
-        [key]: { kind: "error", message: `missing: ${missing.map((p) => p.name).join(", ")}` },
-      }));
-      return;
-    }
-    // Strip empty optional fields so JSON only carries actual values.
-    const body: Record<string, string> = {};
-    for (const [k, v] of Object.entries(params)) {
-      if (v?.trim()) body[k] = v.trim();
-    }
-    setResults((r) => ({ ...r, [key]: { kind: "running" } }));
-    try {
-      const r = await api(`/api/actions/${subsystem}/${action.name}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(Object.keys(body).length ? body : null),
-      });
-      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string };
-      if (!r.ok) {
-        setResults((rs) => ({
-          ...rs,
-          [key]: { kind: "error", message: j.error ?? `HTTP ${r.status}` },
-        }));
-      } else {
-        setResults((rs) => ({
-          ...rs,
-          [key]: { kind: "ok", message: "dispatched" },
-        }));
-        window.setTimeout(
-          () => setResults((rs) => ({ ...rs, [key]: { kind: "idle" } })),
-          2500,
-        );
-      }
-    } catch (e) {
-      setResults((rs) => ({
-        ...rs,
-        [key]: { kind: "error", message: String(e) },
-      }));
-    }
-  };
-
   return (
     <section>
       <h2>Actions</h2>
       <p className="muted help-text">
         Dispatch is fire-and-forget. The outcome of each action shows up in the{" "}
-        <a href="#events">Events</a> tab.
+        <Link to="/events">Events</Link> tab.
       </p>
       {Object.entries(CATALOG).map(([subsystem, actions]) => (
         <div key={subsystem} className="actions-group">
@@ -127,54 +160,9 @@ export function Actions() {
             <div className="muted help-text">no actions defined yet</div>
           ) : (
             <div className="action-cards">
-              {actions.map((a) => {
-                const key = `${subsystem}/${a.name}`;
-                const r = results[key] ?? { kind: "idle" };
-                const params = forms[key] ?? {};
-                return (
-                  <div key={a.name} className={`action-card ${r.kind}`}>
-                    <div className="action-card-head">
-                      <div>
-                        <code className="action-name">{a.name}</code>
-                        <div className="muted help-text">{a.description}</div>
-                      </div>
-                      <button
-                        className={`action-btn ${r.kind}`}
-                        onClick={() => invoke(subsystem, a)}
-                        disabled={r.kind === "running"}
-                      >
-                        {r.kind === "running" ? "…" : "Run"}
-                      </button>
-                    </div>
-                    {a.params && (
-                      <div className="action-fields">
-                        {a.params.map((p) => (
-                          <label key={p.name}>
-                            <span>
-                              {p.label}
-                              {p.required && <span className="req"> *</span>}
-                            </span>
-                            <input
-                              type="text"
-                              value={params[p.name] ?? ""}
-                              placeholder={p.placeholder}
-                              onChange={(e) =>
-                                setFormField(key, p.name, e.target.value)
-                              }
-                            />
-                          </label>
-                        ))}
-                      </div>
-                    )}
-                    {r.kind === "error" && (
-                      <div className="action-result error">{r.message}</div>
-                    )}
-                    {r.kind === "ok" && (
-                      <div className="action-result ok">{r.message}</div>
-                    )}
-                  </div>
-                );
-              })}
+              {actions.map((a) => (
+                <ActionCard key={a.name} subsystem={subsystem} action={a} />
+              ))}
             </div>
           )}
         </div>

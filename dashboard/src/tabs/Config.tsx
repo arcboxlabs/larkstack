@@ -1,79 +1,76 @@
 import { useEffect, useState } from "react";
-import { api } from "../lib/auth";
+import { Button } from "@base-ui/react/button";
+import { Field } from "@base-ui/react/field";
+import { useForm } from "react-hook-form";
+import useSWR from "swr";
+import { errMessage, mutateRequest, textFetcher } from "../lib/http";
 
-type SaveState =
-  | { kind: "idle" }
-  | { kind: "saving" }
-  | { kind: "saved" }
-  | { kind: "error"; message: string };
+interface ConfigForm {
+  config: string;
+}
 
 export function Config() {
-  const [original, setOriginal] = useState<string | null>(null);
-  const [draft, setDraft] = useState<string>("");
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [save, setSave] = useState<SaveState>({ kind: "idle" });
+  const { data, error, isLoading, mutate } = useSWR<string>(
+    "/api/config",
+    textFetcher,
+  );
+  const {
+    register,
+    handleSubmit,
+    reset,
+    setError,
+    formState: { isDirty, isSubmitting, errors },
+  } = useForm<ConfigForm>({ defaultValues: { config: "" } });
+  const [saved, setSaved] = useState(false);
 
+  // Adopt the loaded TOML as the form baseline so `isDirty` tracks real edits.
   useEffect(() => {
-    api("/api/config")
-      .then((r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        return r.text();
-      })
-      .then((text) => {
-        setOriginal(text);
-        setDraft(text);
-        setLoadError(null);
-      })
-      .catch((e) => setLoadError(String(e)));
-  }, []);
+    if (data !== undefined) reset({ config: data });
+  }, [data, reset]);
 
-  const dirty = original !== null && draft !== original;
-
-  const onSave = async () => {
-    setSave({ kind: "saving" });
+  const onSubmit = handleSubmit(async ({ config }) => {
+    setSaved(false);
     try {
-      const r = await api("/api/config", {
+      await mutateRequest("/api/config", {
         method: "PUT",
-        headers: { "Content-Type": "application/toml" },
-        body: draft,
+        body: config,
+        contentType: "application/toml",
       });
-      if (!r.ok) {
-        const j = (await r.json().catch(() => null)) as { error?: string } | null;
-        throw new Error(j?.error ?? `HTTP ${r.status}`);
-      }
-      setOriginal(draft);
-      setSave({ kind: "saved" });
-      window.setTimeout(() => setSave({ kind: "idle" }), 2000);
+      await mutate(); // re-GET the canonical stored TOML → resets the baseline
+      setSaved(true);
+      window.setTimeout(() => setSaved(false), 2000);
     } catch (e) {
-      setSave({ kind: "error", message: String(e) });
+      setError("root", { message: errMessage(e) });
     }
-  };
+  });
 
   return (
     <section>
       <header className="events-header">
         <h2>Configuration</h2>
         <div className="filters">
-          {save.kind === "error" && (
-            <span className="error">{save.message}</span>
+          {errors.root?.message && (
+            <span className="error">{errors.root.message}</span>
           )}
-          {save.kind === "saved" && <span className="conn ok">saved</span>}
-          <button
-            onClick={onSave}
-            disabled={!dirty || save.kind === "saving" || original === null}
+          {saved && <span className="conn ok">saved</span>}
+          <Button
+            type="button"
+            onClick={onSubmit}
+            disabled={!isDirty || isSubmitting || isLoading}
           >
-            {save.kind === "saving" ? "Saving…" : "Save"}
-          </button>
+            {isSubmitting ? "Saving…" : "Save"}
+          </Button>
         </div>
       </header>
-      {loadError && <p className="error">Failed to load: {loadError}</p>}
-      <textarea
-        className="config-editor"
-        spellCheck={false}
-        value={draft}
-        disabled={original === null}
-        onChange={(e) => setDraft(e.target.value)}
-      />
+      {error && <p className="error">Failed to load: {errMessage(error)}</p>}
+      <Field.Root>
+        <Field.Control
+          className="config-editor"
+          disabled={isLoading || data === undefined}
+          render={<textarea spellCheck={false} />}
+          {...register("config")}
+        />
+      </Field.Root>
     </section>
   );
 }

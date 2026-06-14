@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { mutate } from "swr";
 import { sseUrl } from "./auth";
 
 export type Level = "trace" | "debug" | "info" | "warn" | "error";
@@ -24,6 +25,7 @@ export function useEvents(): {
   const [connected, setConnected] = useState(false);
   const [laggedCount, setLaggedCount] = useState(0);
   const reconnectRef = useRef<number | null>(null);
+  const failuresRef = useRef(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -32,13 +34,23 @@ export function useEvents(): {
     const connect = () => {
       if (cancelled) return;
       src = new EventSource(sseUrl("/api/events"));
-      src.onopen = () => setConnected(true);
+      src.onopen = () => {
+        failuresRef.current = 0;
+        setConnected(true);
+      };
       src.onerror = () => {
         setConnected(false);
         src?.close();
-        if (!cancelled) {
-          reconnectRef.current = window.setTimeout(connect, 2000);
+        if (cancelled) return;
+        // EventSource hides the HTTP status, so a 401 from a lapsed session is
+        // indistinguishable from a transient drop and would reconnect forever.
+        // After a few failures, re-probe /auth/me so the app gate can fall back
+        // to login — mirroring the REST 401 path.
+        failuresRef.current += 1;
+        if (failuresRef.current === 3) {
+          void mutate("/auth/me");
         }
+        reconnectRef.current = window.setTimeout(connect, 2000);
       };
       src.onmessage = (e) => {
         try {

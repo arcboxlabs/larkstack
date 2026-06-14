@@ -1,3 +1,4 @@
+import { Button } from "@base-ui/react/button";
 import { login } from "./lib/auth";
 
 export function Login() {
@@ -5,9 +6,9 @@ export function Login() {
     <main className="login">
       <h1>larkstack console</h1>
       <p className="muted">Sign in with your Lark account to continue.</p>
-      <button type="button" onClick={login}>
+      <Button type="button" onClick={login}>
         Sign in with Lark
-      </button>
+      </Button>
     </main>
   );
 }

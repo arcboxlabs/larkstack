@@ -1,6 +1,9 @@
 /// Console auth state. The session lives in an HttpOnly cookie set by the Lark
 /// OAuth flow; the browser sends it automatically, so there is no token to
-/// store. `/auth/me` reports whether OAuth is configured and who is signed in.
+/// store. `/auth/me` reports whether OAuth is configured and who is signed in,
+/// and is read through SWR so the App gate and the header chip share one probe.
+
+import useSWR, { mutate } from "swr";
 
 export type Me = {
   /// False when OAuth is unconfigured — the console is open, no login needed.
@@ -9,44 +12,28 @@ export type Me = {
   user?: { email: string; name: string };
 };
 
-let current: Me | null = null;
-const listeners = new Set<() => void>();
+const ME_KEY = "/auth/me";
+const SIGNED_OUT: Me = { auth_required: true, authenticated: false };
 
-export function getMe(): Me | null {
-  return current;
-}
-
-export function subscribe(fn: () => void): () => void {
-  listeners.add(fn);
-  return () => listeners.delete(fn);
-}
-
-export async function refreshMe(): Promise<Me> {
+/// `/auth/me` never surfaces an error to the UI: a network failure or non-200
+/// just means "treat as signed out".
+async function meFetcher(key: string): Promise<Me> {
   try {
-    const r = await fetch("/auth/me", { credentials: "same-origin" });
-    current = (await r.json()) as Me;
+    const res = await fetch(key, { credentials: "same-origin" });
+    if (!res.ok) return SIGNED_OUT;
+    return (await res.json()) as Me;
   } catch {
-    current = { auth_required: true, authenticated: false };
+    return SIGNED_OUT;
   }
-  listeners.forEach((fn) => fn());
-  return current;
 }
 
-/// `fetch` wrapper for `/api/*`. The session rides in the cookie, so no header
-/// is set; a 401 means it lapsed — re-probe so the UI falls back to login.
-export async function api(
-  input: string,
-  init: RequestInit = {},
-): Promise<Response> {
-  const r = await fetch(input, { ...init, credentials: "same-origin" });
-  if (r.status === 401) refreshMe();
-  return r;
-}
-
-/// EventSource sends the session cookie for same-origin requests, so the SSE
-/// URL needs no token.
-export function sseUrl(path: string): string {
-  return path;
+/// The current session. Re-checks on window focus so a lapsed session bounces
+/// back to login when the operator returns to the tab.
+export function useMe(): { me: Me | undefined; isLoading: boolean } {
+  const { data, isLoading } = useSWR<Me>(ME_KEY, meFetcher, {
+    revalidateOnFocus: true,
+  });
+  return { me: data, isLoading };
 }
 
 /// Redirect the browser into the Lark OAuth flow.
@@ -54,7 +41,14 @@ export function login(): void {
   window.location.assign("/auth/login");
 }
 
+/// End the session, then re-probe `/auth/me` so the UI returns to login.
 export async function logout(): Promise<void> {
   await fetch("/auth/logout", { method: "POST", credentials: "same-origin" });
-  await refreshMe();
+  await mutate(ME_KEY);
+}
+
+/// EventSource sends the session cookie on same-origin requests, so the SSE URL
+/// needs no token.
+export function sseUrl(path: string): string {
+  return path;
 }
