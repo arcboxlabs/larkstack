@@ -6,15 +6,15 @@ use std::sync::Arc;
 
 use askama::Template;
 use async_trait::async_trait;
-use chrono::{Duration as ChronoDuration, NaiveDate, Utc};
-use chrono_tz::Asia::Shanghai;
+use chrono::NaiveDate;
 use larkoapi::{LarkBotClient, WsEventHandler};
 use serde_json::Value;
 use tracing::{info, warn};
 
 use crate::config::StandupConfig;
-use crate::flow;
+use crate::lark::doc;
 use crate::templates::{CheckTemplate, HelpTemplate};
+use crate::{date, flow};
 
 pub struct CommandBot {
     pub cfg: Arc<StandupConfig>,
@@ -117,8 +117,8 @@ impl CommandBot {
         let tokens: Vec<&str> = cmd_text.split_whitespace().collect();
         let cmd = tokens.first().copied().unwrap_or("help");
         let second = tokens.get(1).copied();
-        let today = Utc::now().with_timezone(&Shanghai).date_naive();
-        let tomorrow = today + ChronoDuration::days(1);
+        let today = date::today();
+        let tomorrow = date::tomorrow();
 
         // non-bot mentioned open_ids (for `urgent @user`)
         let mentioned_users: Vec<String> = mentions
@@ -134,21 +134,22 @@ impl CommandBot {
         match cmd {
             "help" | "/help" | "h" | "?" => Ok(render_help()),
             "check" | "/check" => {
-                let date = resolve_date(second, today);
+                let date = date::resolve(second, today);
                 self.do_check(date).await
             }
             "ensure" | "/ensure" => {
-                let date = resolve_date(second, tomorrow);
-                let doc = flow::ensure_document_for_date(&self.client, &self.cfg, date).await?;
-                Ok(format!("✅ {date} 文档已就位\n{}", doc.url))
+                let date = date::resolve(second, tomorrow);
+                let standup_doc =
+                    doc::ensure_document_for_date(&self.client, &self.cfg, date).await?;
+                Ok(format!("✅ {date} 文档已就位\n{}", standup_doc.url))
             }
             "announce" | "/announce" => {
-                let date = resolve_date(second, tomorrow);
+                let date = date::resolve(second, tomorrow);
                 flow::announce(&self.cfg, &self.client, date).await?;
                 Ok(format!("✅ {date} 公告已发群"))
             }
             "remind" | "/remind" => {
-                let date = resolve_date(second, today);
+                let date = date::resolve(second, today);
                 flow::remind(&self.cfg, &self.client, date, false).await?;
                 Ok(format!("✅ {date} 提醒已发送(未填者)"))
             }
@@ -163,7 +164,7 @@ impl CommandBot {
                     }
                     Ok(out.trim_end().to_string())
                 } else {
-                    let date = resolve_date(second, today);
+                    let date = date::resolve(second, today);
                     flow::remind(&self.cfg, &self.client, date, true).await?;
                     Ok(format!("✅ {date} 加急提醒已发出(未填者)"))
                 }
@@ -173,8 +174,8 @@ impl CommandBot {
     }
 
     async fn do_check(&self, date: NaiveDate) -> Result<String, String> {
-        let doc = flow::ensure_document_for_date(&self.client, &self.cfg, date).await?;
-        let missing = flow::find_missing_user_ids(&self.client, &doc.doc_id).await?;
+        let standup_doc = doc::ensure_document_for_date(&self.client, &self.cfg, date).await?;
+        let missing = doc::find_missing_user_ids(&self.client, &standup_doc.doc_id).await?;
         let mut name_of: HashMap<String, String> = HashMap::new();
         if let Some(chat_id) = self.cfg.chat_id.as_deref()
             && let Ok(members) = self.client.list_chat_members(chat_id).await
@@ -192,7 +193,7 @@ impl CommandBot {
             .collect();
         CheckTemplate {
             date: &date.to_string(),
-            url: &doc.url,
+            url: &standup_doc.url,
             missing: rows,
         }
         .render()
@@ -204,15 +205,4 @@ fn render_help() -> String {
     HelpTemplate
         .render()
         .unwrap_or_else(|e| format!("help render failed: {e}"))
-}
-
-fn resolve_date(arg: Option<&str>, default: NaiveDate) -> NaiveDate {
-    match arg {
-        None => default,
-        Some("today") => Utc::now().with_timezone(&Shanghai).date_naive(),
-        Some("tomorrow") => {
-            Utc::now().with_timezone(&Shanghai).date_naive() + ChronoDuration::days(1)
-        }
-        Some(s) => NaiveDate::parse_from_str(s, "%Y-%m-%d").unwrap_or(default),
-    }
 }

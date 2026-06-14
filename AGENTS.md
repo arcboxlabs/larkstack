@@ -134,12 +134,19 @@ Config via `figment` + env vars; see `apps/automations/minutes/README.md`.
 
 Daily standup runner: WebSocket command bot + scheduler (Asia/Shanghai). Actions: `announce | ensure | remind | urgent | urgent-user | check` (accept optional `today | tomorrow | YYYY-MM-DD`; `urgent-user` also needs `open_id`).
 
-Modules:
-- `scheduler.rs` — Cron-style triggers for announce/remind/urgent
-- `flow.rs` — Standup doc creation, sharing, escalation
-- `commands.rs` — `WsEventHandler` impl for chat command parsing (`@-mention` detection)
-- `templates.rs` — `askama` template rendering for chat replies
-- `app.rs` — `App`/`Instance` impl; `run::serve_with_bot(cancel)`, `actions::handle(...)`
+Organized by architectural role (ports-and-adapters, like the linear app). The five operations (`ensure`/`announce`/`remind`/`urgent_one`/`check`) live once in `flow.rs` — the domain core — and every inbound surface translates its trigger into a `flow` call; the Lark API is reached only through the `lark/` adapter:
+- `flow.rs` — Domain: the high-level standup operations. Composes `lark::doc` + `lark::card`; the single source of orchestration.
+- `lark/` — Outbound adapter (the only code that talks to Lark).
+  - `lark/doc.rs` — The standup doc itself: create the per-day Docx, seed the member table, read it back to detect who hasn't filled their cells.
+  - `lark/card.rs` — Announce + reminder card builders.
+- `trigger/` — Inbound surfaces that drive `flow` (the standalone CLI in `main.rs` is the fourth).
+  - `trigger/scheduler.rs` — Autonomous Asia/Shanghai timer (announce/remind/urgent).
+  - `trigger/commands.rs` — `WsEventHandler` impl for chat command parsing (`@-mention` detection).
+  - `trigger/actions.rs` — Console action dispatch (`handle(action, params)`).
+- `runtime/` — Bootstrap + console-host integration.
+  - `runtime/app.rs` — `App`/`Instance` impl registered by the console.
+  - `runtime/run.rs` — `build_bot` + `serve_with_bot(cancel)` (WS bot + scheduler wiring); shared by the host instance and the standalone binary.
+- `config.rs` — Config structs + env/TOML loaders. `date.rs` — Shared `today()`/`tomorrow()`/`resolve()` (Asia/Shanghai), the one parser for the `today | tomorrow | YYYY-MM-DD` argument every surface accepts. `templates.rs` — `askama` text templates for chat replies + CLI output.
 
 Required env: `LARK_APP_ID`, `LARK_APP_SECRET`, `STANDUP_CHAT_ID`, `STANDUP_FOLDER_TOKEN`, `STANDUP_ENABLED=true` (scheduler). Optional: `LARK_BASE_URL` (default `https://open.larksuite.com`). Note the `[standup].enabled` host toggle is distinct from `[standup.standup].enabled` (scheduler auto-fire).
 

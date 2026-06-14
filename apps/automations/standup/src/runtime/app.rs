@@ -7,7 +7,7 @@ use serde_json::{Value, json};
 use tokio_util::sync::CancellationToken;
 
 use crate::config::AppConfig;
-use crate::run::{build_bot, serve_with_bot};
+use crate::runtime::run::{build_bot, serve_with_bot};
 
 /// The registered App for the console host.
 pub fn app() -> Arc<dyn App> {
@@ -65,6 +65,6 @@ impl Instance for StandupInstance {
     }
 
     async fn handle_action(&self, action: &str, params: Value) -> anyhow::Result<String> {
-        crate::actions::handle(&self.cfg.standup, &self.bot, action, params).await
+        crate::trigger::actions::handle(&self.cfg.standup, &self.bot, action, params).await
     }
 }

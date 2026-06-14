@@ -6,15 +6,14 @@
 //! - 09:30 same reminder for today's doc
 //! - 10:00 final reminder + in-app urgent escalation
 
-pub mod actions;
-pub mod app;
-pub mod commands;
 pub mod config;
+pub mod date;
 pub mod flow;
-pub mod run;
-pub mod scheduler;
+pub mod lark;
+pub mod runtime;
 pub mod templates;
+pub mod trigger;
 
-pub use app::app;
 pub use config::{AppConfig, LarkConfig, StandupConfig};
-pub use run::{build_bot, run, run_with_bot};
+pub use runtime::app::app;
+pub use runtime::run::{build_bot, run, run_with_bot};

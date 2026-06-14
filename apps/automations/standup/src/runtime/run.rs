@@ -5,9 +5,9 @@ use larkstack_core::ControlHandle;
 use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
 
-use crate::commands::CommandBot;
 use crate::config::AppConfig;
-use crate::scheduler;
+use crate::trigger::commands::CommandBot;
+use crate::trigger::scheduler;
 
 /// Build the Lark bot client from a typed config. Synchronous and cheap.
 pub fn build_bot(cfg: &AppConfig) -> anyhow::Result<Arc<LarkBotClient>> {

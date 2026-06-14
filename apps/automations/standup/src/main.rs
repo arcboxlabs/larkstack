@@ -1,13 +1,11 @@
 use std::process::ExitCode;
 use std::sync::Arc;
 
-use chrono::{Duration as ChronoDuration, NaiveDate, Utc};
-use chrono_tz::Asia::Shanghai;
 use larkoapi::LarkBotClient;
 use larkstack_core::ControlPlane;
 use tracing::error;
 
-use standup::{AppConfig, flow};
+use standup::{AppConfig, date, flow};
 
 #[tokio::main]
 async fn main() -> ExitCode {
@@ -29,8 +27,8 @@ async fn main() -> ExitCode {
     let cmd = args.first().map(String::as_str).unwrap_or("run");
     let date_arg = args.get(1).map(String::as_str);
 
-    let today = Utc::now().with_timezone(&Shanghai).date_naive();
-    let tomorrow = today + ChronoDuration::days(1);
+    let today = date::today();
+    let tomorrow = date::tomorrow();
 
     match cmd {
         "run" => {
@@ -47,8 +45,8 @@ async fn main() -> ExitCode {
         "announce" | "ensure" | "remind" | "urgent" | "check" => {
             let bot = build_bot(&cfg);
             let date = match cmd {
-                "announce" | "ensure" => resolve_date(date_arg, tomorrow),
-                _ => resolve_date(date_arg, today),
+                "announce" | "ensure" => date::resolve(date_arg, tomorrow),
+                _ => date::resolve(date_arg, today),
             };
             let result = match cmd {
                 "announce" => flow::announce(&cfg.standup, &bot, date).await,
@@ -72,7 +70,7 @@ async fn main() -> ExitCode {
                 return ExitCode::from(2);
             };
             let bot = build_bot(&cfg);
-            let date = resolve_date(args.get(2).map(String::as_str), today);
+            let date = date::resolve(args.get(2).map(String::as_str), today);
             match flow::urgent_one(&cfg.standup, &bot, date, uid).await {
                 Ok(()) => ExitCode::SUCCESS,
                 Err(e) => {
@@ -101,20 +99,6 @@ fn build_bot(cfg: &AppConfig) -> Arc<LarkBotClient> {
         cfg.lark.base_url.clone(),
         http,
     ))
-}
-
-fn resolve_date(arg: Option<&str>, default: NaiveDate) -> NaiveDate {
-    match arg {
-        None => default,
-        Some("today") => Utc::now().with_timezone(&Shanghai).date_naive(),
-        Some("tomorrow") => {
-            Utc::now().with_timezone(&Shanghai).date_naive() + ChronoDuration::days(1)
-        }
-        Some(s) => NaiveDate::parse_from_str(s, "%Y-%m-%d").unwrap_or_else(|e| {
-            eprintln!("bad date {s:?}: {e} — using default {default}");
-            default
-        }),
-    }
 }
 
 fn print_help() {
