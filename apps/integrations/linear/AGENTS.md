@@ -24,13 +24,15 @@ The tree follows the data path — HTTP in, normalize, adapt out:
 - **`lark/`** — the Lark adapter (bridged *to*).
   - `cards.rs` — card builders (`issue_card`/`comment_card`/`assign_dm`/`preview_card`).
   - `notify.rs` — send: group webhook + assignee DM.
-- **`user_map/`** — admin-maintained Linear-email → Lark-email overrides, for
-  when a person's Linear and Lark emails differ. Lives in the shared App
-  database (`larkstack_core::db`), table `linear_user_map`.
-  - `entity.rs` — sea-orm entity. `migration.rs` — creates the table
-    (`App::migrations`, run by the host at startup before the app is enabled).
-    `routes.rs` — admin CRUD, mounted by the host (`App::routes`) at
-    `/api/apps/linear/user-map`. `mod.rs` — `resolve_lark_email`.
+- **`db/`** — the app's persistence layer (mirrors `larkstack_core::db`), one
+  submodule per entity. Today just `user_map/` — admin-maintained Linear-email →
+  Lark-email overrides, for when a person's Linear and Lark emails differ; table
+  `linear_user_map`.
+  - `user_map/entity.rs` — sea-orm entity. `user_map/migration.rs` — creates the
+    table (`App::migrations`, run by the host at startup before the app is
+    enabled). `user_map/routes.rs` — admin CRUD, mounted by the host
+    (`App::routes`) at `/api/apps/linear/user-map`. `user_map/mod.rs` —
+    `resolve_lark_email`.
 - **top level** — wiring: `app.rs` (`App`/`Instance` for the host, + `migrations`
   / `routes`), `config.rs` (`AppState` + TOML/env), `actions.rs` (console
   actions: `ping`, `test-lark`), `main.rs` (standalone bin), `lib.rs`.
@@ -42,7 +44,7 @@ The tree follows the data path — HTTP in, normalize, adapt out:
 - `Issue` create/update → `domain::IssueNotification` → `domain::debounce` (merge
   within the window) → `lark::cards::issue_card` → `lark::notify::group` +
   assignee `notify::dm`. The assignee DM target is the Linear email resolved
-  through `user_map::resolve_lark_email` (override if any, else unchanged).
+  through `db::user_map::resolve_lark_email` (override if any, else unchanged).
 - `Comment` create → `lark::cards::comment_card` → `notify::group` (no debounce).
 
 **Link previews** (`POST /lark/event`): `lark_kit::event::classify`

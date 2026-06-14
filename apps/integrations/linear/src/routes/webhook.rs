@@ -191,7 +191,7 @@ async fn send_debounced(state: &AppState, pending: PendingUpdate) {
     if let Some(linear_email) = &pending.dm_email {
         // The webhook gives us the assignee's Linear email; resolve it to their
         // Lark email through the admin override table (no-op when they match).
-        let lark_email = crate::user_map::resolve_lark_email(&state.db, linear_email).await;
+        let lark_email = crate::db::user_map::resolve_lark_email(&state.db, linear_email).await;
         notify::dm(state, &lark_email, &cards::assign_dm(&pending.notif)).await;
     }
 }

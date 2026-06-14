@@ -41,11 +41,11 @@ impl App for LinearApp {
     }
 
     fn migrations(&self) -> Vec<Box<dyn sea_orm_migration::MigrationTrait>> {
-        crate::user_map::migrations()
+        crate::db::user_map::migrations()
     }
 
     fn routes(&self, services: &AppServices) -> Option<axum::Router> {
-        Some(crate::user_map::router(services.db.clone()))
+        Some(crate::db::user_map::router(services.db.clone()))
     }
 }
 

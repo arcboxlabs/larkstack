@@ -49,7 +49,7 @@ pub struct AppState {
     pub bot: Option<LarkBotClient>,
     pub linear_client: Option<LinearClient>,
     pub debounce: DebounceMap,
-    /// Shared App database — backs the [`user_map`](crate::user_map) overrides.
+    /// Shared App database — backs the [`user_map`](crate::db::user_map) overrides.
     pub db: DatabaseConnection,
 }
 
