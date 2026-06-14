@@ -1,22 +1,14 @@
 # Lark Stack - Integration Hub for Lark
 
-<p align="center">
-  <strong>An open-source integration hub for Lark / Feishu</strong> — a Slack-grade ecosystem in one self-hosted binary.
-  <br>
-  One process supervises every integration and automation, with a React console for status, config, and one-shot actions.
-</p>
+**An open-source integration hub for Lark / Feishu** — a Slack-grade ecosystem in one self-hosted binary.
 
-<p align="center">
-  <img src="https://img.shields.io/badge/Rust-Edition_2024-orange.svg" alt="Rust">
-  <img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License">
-</p>
+One process supervises every integration and automation, with a React console for status, config, and one-shot actions.
 
-<br>
+![Rust](https://img.shields.io/badge/Rust-Edition_2024-orange.svg)
+![License](https://img.shields.io/badge/License-MIT-blue.svg)
 
-<p align="center">
-  <a href="./README.md"><img alt="README in English" src="https://img.shields.io/badge/English-d9d9d9"></a>
-  <a href="./README_CN.md"><img alt="简体中文 README" src="https://img.shields.io/badge/简体中文-d9d9d9"></a>
-</p>
+[![README in English](https://img.shields.io/badge/English-d9d9d9)](./README.md)
+[![简体中文 README](https://img.shields.io/badge/简体中文-d9d9d9)](./README_CN.md)
 
 <hr>
 

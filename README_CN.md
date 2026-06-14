@@ -1,22 +1,14 @@
 # Lark Stack - 开源的飞书应用中心
 
-<p align="center">
-  <strong>面向 Lark / 飞书的开源集成中枢</strong>——用一个自托管二进制，构建匹敌 Slack 级别的生态。
-  <br>
-  一个进程监管所有集成与自动化，自带 React 控制台（状态、配置、动作触发）。
-</p>
+**面向 Lark / 飞书的开源集成中枢**——用一个自托管二进制，构建匹敌 Slack 级别的生态。
 
-<p align="center">
-  <img src="https://img.shields.io/badge/Rust-Edition_2024-orange.svg" alt="Rust">
-  <img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License">
-</p>
+一个进程监管所有集成与自动化，自带 React 控制台（状态、配置、动作触发）。
 
-<br>
-  
-<p align="center">
-  <a href="./README.md"><img alt="README in English" src="https://img.shields.io/badge/English-d9d9d9"></a>
-  <a href="./README_CN.md"><img alt="简体中文 README" src="https://img.shields.io/badge/简体中文-d9d9d9"></a>
-</p>
+![Rust](https://img.shields.io/badge/Rust-Edition_2024-orange.svg)
+![License](https://img.shields.io/badge/License-MIT-blue.svg)
+
+[![README in English](https://img.shields.io/badge/English-d9d9d9)](./README.md)
+[![简体中文 README](https://img.shields.io/badge/简体中文-d9d9d9)](./README_CN.md)
 
 <hr>
 
