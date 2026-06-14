@@ -5,39 +5,23 @@
 //! and the axum admin API + embedded console UI. The host depends only on the
 //! App contract, never on individual apps.
 
-use std::convert::Infallible;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::time::Duration;
 
 use anyhow::Context;
-use axum::extract::Path as AxPath;
-use axum::{
-    Json, Router,
-    extract::{FromRef, Query, State},
-    http::{HeaderMap, StatusCode, header},
-    middleware,
-    response::sse::{Event as SseEvent, KeepAlive, Sse},
-    routing::get,
-};
+use axum::extract::FromRef;
 use axum_extra::extract::cookie::Key;
-use futures_util::stream::{Stream, StreamExt};
 use larkstack_core::{
-    ActionEnvelope, App, AppServices, ControlLayer, ControlPlane, DispatchError, EventStore,
-    Manifest, SqliteMetricsSink, SqliteStateStore,
+    App, AppServices, ControlLayer, ControlPlane, EventStore, Manifest, SqliteMetricsSink,
+    SqliteStateStore,
 };
-use serde::Deserialize;
-use tokio_stream::wrappers::{BroadcastStream, errors::BroadcastStreamRecvError};
 use tracing::{info, warn};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 
 mod assets;
-mod lark_apps;
-mod oauth;
+mod routes;
 mod supervisor;
-
-const BACKFILL_LIMIT: usize = 200;
 
 const DEFAULT_CONFIG: &str = r#"# larkstack console config
 #
@@ -192,48 +176,17 @@ impl Larkstack {
             config_path: config_path.clone(),
             manifests: Arc::new(manifests),
             http: reqwest::Client::new(),
-            key: oauth::load_session_key(&data_dir),
+            key: routes::oauth::load_session_key(&data_dir),
         };
 
-        if oauth::resolve(&control.config()).is_none() {
+        if routes::oauth::resolve(&control.config()).is_none() {
             warn!(
                 "Lark OAuth is not configured ([console].lark_app unset) — /api/* is \
                  OPEN. Bind a Lark app from the console to require sign-in."
             );
         }
 
-        let api = Router::new()
-            .route("/status", get(status))
-            .route("/apps", get(apps))
-            .route("/events", get(events))
-            .route("/config", get(get_config).put(put_config))
-            .route("/lark-apps", get(lark_apps::list).post(lark_apps::upsert))
-            .route("/lark-apps/test", axum::routing::post(lark_apps::test))
-            .route(
-                "/lark-apps/{name}",
-                axum::routing::delete(lark_apps::delete),
-            )
-            .route(
-                "/actions/{app}/{action}",
-                axum::routing::post(dispatch_action),
-            )
-            .route_layer(middleware::from_fn_with_state(
-                state.clone(),
-                oauth::require_session,
-            ))
-            .route("/health", get(|| async { "ok" }));
-
-        let auth = Router::new()
-            .route("/login", get(oauth::login))
-            .route("/callback", get(oauth::callback))
-            .route("/logout", axum::routing::post(oauth::logout))
-            .route("/me", get(oauth::me));
-
-        let router = Router::new()
-            .nest("/api", api)
-            .nest("/auth", auth)
-            .fallback(assets::serve)
-            .with_state(state);
+        let router = routes::build(state);
 
         let port: u16 = std::env::var("CONSOLE_PORT")
             .ok()
@@ -332,130 +285,4 @@ fn spawn_persistence(control: &ControlPlane, store: &EventStore) {
             }
         }
     });
-}
-
-async fn status(State(s): State<HostState>) -> (StatusCode, Json<serde_json::Value>) {
-    let snap = s.control.snapshot().await;
-    (
-        StatusCode::OK,
-        Json(serde_json::json!({ "subsystems": snap })),
-    )
-}
-
-async fn apps(State(s): State<HostState>) -> Json<serde_json::Value> {
-    Json(serde_json::json!({ "apps": &*s.manifests }))
-}
-
-async fn get_config(
-    State(s): State<HostState>,
-) -> (StatusCode, [(header::HeaderName, &'static str); 1], String) {
-    let toml = (*s.control.config()).clone();
-    (
-        StatusCode::OK,
-        [(header::CONTENT_TYPE, "application/toml; charset=utf-8")],
-        toml,
-    )
-}
-
-async fn put_config(
-    State(s): State<HostState>,
-    body: String,
-) -> (StatusCode, Json<serde_json::Value>) {
-    if let Err(e) = toml::from_str::<toml::Value>(&body) {
-        return (
-            StatusCode::BAD_REQUEST,
-            Json(serde_json::json!({ "error": format!("invalid TOML: {e}") })),
-        );
-    }
-    if let Err(e) = std::fs::write(s.config_path.as_path(), &body) {
-        return (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(serde_json::json!({ "error": format!("write {}: {e}", s.config_path.display()) })),
-        );
-    }
-    s.control.set_config(Arc::new(body));
-    info!("config updated; affected apps will restart");
-    (StatusCode::OK, Json(serde_json::json!({ "ok": true })))
-}
-
-async fn dispatch_action(
-    State(s): State<HostState>,
-    AxPath((app, action)): AxPath<(String, String)>,
-    body: Option<Json<serde_json::Value>>,
-) -> (StatusCode, Json<serde_json::Value>) {
-    let params = body.map(|j| j.0).unwrap_or(serde_json::Value::Null);
-    let envelope = ActionEnvelope {
-        name: action.clone(),
-        params,
-    };
-    match s.control.dispatch(&app, envelope).await {
-        Ok(()) => (
-            StatusCode::ACCEPTED,
-            Json(serde_json::json!({ "ok": true, "app": app, "action": action })),
-        ),
-        Err(DispatchError::UnknownSubsystem) => (
-            StatusCode::NOT_FOUND,
-            Json(serde_json::json!({ "error": format!("unknown app '{app}'") })),
-        ),
-        Err(DispatchError::Closed) => (
-            StatusCode::SERVICE_UNAVAILABLE,
-            Json(serde_json::json!({ "error": format!("app '{app}' is not running") })),
-        ),
-    }
-}
-
-#[derive(Deserialize)]
-struct EventsQuery {
-    since: Option<u64>,
-}
-
-async fn events(
-    State(s): State<HostState>,
-    Query(q): Query<EventsQuery>,
-    headers: HeaderMap,
-) -> Sse<impl Stream<Item = Result<SseEvent, Infallible>>> {
-    let live_rx = s.control.subscribe();
-
-    let since = q.since.or_else(|| {
-        headers
-            .get(header::HeaderName::from_static("last-event-id"))
-            .and_then(|v| v.to_str().ok())
-            .and_then(|v| v.parse().ok())
-    });
-
-    let backfill = match since {
-        Some(id) => s.store.since(id, BACKFILL_LIMIT).await.unwrap_or_default(),
-        None => s.store.recent(BACKFILL_LIMIT).await.unwrap_or_default(),
-    };
-    let last_replayed = backfill.last().map(|e| e.id).unwrap_or(0);
-
-    let history = futures_util::stream::iter(backfill.into_iter().map(|ev| {
-        Ok::<_, Infallible>(
-            SseEvent::default()
-                .id(ev.id.to_string())
-                .json_data(&ev)
-                .unwrap_or_else(|_| SseEvent::default()),
-        )
-    }));
-
-    let live = BroadcastStream::new(live_rx).filter_map(move |res| {
-        let item = match res {
-            Ok(ev) => {
-                if ev.id <= last_replayed {
-                    None
-                } else {
-                    Some(Ok(SseEvent::default()
-                        .id(ev.id.to_string())
-                        .json_data(&ev)
-                        .unwrap_or_else(|_| SseEvent::default())))
-                }
-            }
-            Err(BroadcastStreamRecvError::Lagged(n)) => {
-                Some(Ok(SseEvent::default().event("lagged").data(n.to_string())))
-            }
-        };
-        async move { item }
-    });
-
-    Sse::new(history.chain(live)).keep_alive(KeepAlive::new().interval(Duration::from_secs(15)))
 }

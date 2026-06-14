@@ -34,3 +34,6 @@ axum-extra = { version = "0.12.6", features = ["cookie-signed"] }
 rand = "0.8"
 sha2 = "0.10"
 base64 = "0.22"
+utoipa = "5.5.0"
+utoipa-axum = "0.2.0"
+utoipa-scalar = { version = "0.3.0", features = ["axum"] }

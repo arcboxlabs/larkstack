@@ -29,6 +29,7 @@ use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256, Sha512};
 use tracing::warn;
+use utoipa::{IntoParams, ToSchema};
 
 use crate::HostState;
 
@@ -171,6 +172,14 @@ fn read_session(jar: &SignedCookieJar) -> Option<Session> {
 // ---- handlers --------------------------------------------------------------
 
 /// `GET /auth/login` — start the OAuth handshake; redirect to Lark.
+#[utoipa::path(
+    get, path = "/login", tag = "auth",
+    responses(
+        (status = 303, description = "Redirect to Lark's authorize page"),
+        (status = 400, description = "OAuth is not configured"),
+        (status = 500, description = "Could not build the authorize URL"),
+    ),
+)]
 pub async fn login(
     State(s): State<HostState>,
     jar: SignedCookieJar,
@@ -220,15 +229,29 @@ pub async fn login(
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, IntoParams)]
+#[into_params(parameter_in = Query)]
 pub struct CallbackQuery {
+    /// Authorization code from Lark (present on success).
     code: Option<String>,
+    /// Opaque state echoed back; must match the login handshake.
     state: Option<String>,
+    /// Error code from Lark (present when the user denied access).
     error: Option<String>,
 }
 
 /// `GET /auth/callback` — exchange the code, check the allowlist, mint a
 /// session.
+#[utoipa::path(
+    get, path = "/callback", tag = "auth",
+    params(CallbackQuery),
+    responses(
+        (status = 303, description = "Signed in; redirect to the console"),
+        (status = 400, description = "Missing/mismatched login state, or a Lark error"),
+        (status = 403, description = "Account is not in [console].admins"),
+        (status = 502, description = "Token exchange or user_info request failed"),
+    ),
+)]
 pub async fn callback(
     State(s): State<HostState>,
     jar: SignedCookieJar,
@@ -318,18 +341,22 @@ pub async fn callback(
 }
 
 /// `POST /auth/logout` — drop the session cookie.
+#[utoipa::path(
+    post, path = "/logout", tag = "auth",
+    responses((status = 204, description = "Session cleared")),
+)]
 pub async fn logout(jar: SignedCookieJar) -> Response {
     let jar = jar.remove(Cookie::build((SESSION_COOKIE, "")).path("/").build());
     (jar, StatusCode::NO_CONTENT).into_response()
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct MeUser {
     email: String,
     name: String,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct Me {
     /// Whether OAuth is configured at all. When false the console is open.
     auth_required: bool,
@@ -339,6 +366,10 @@ pub struct Me {
 }
 
 /// `GET /auth/me` — ungated; tells the UI whether to show the login screen.
+#[utoipa::path(
+    get, path = "/me", tag = "auth",
+    responses((status = 200, description = "Auth + current session state", body = Me)),
+)]
 pub async fn me(State(s): State<HostState>, jar: SignedCookieJar) -> Json<Me> {
     if resolve(&s.control.config()).is_none() {
         return Json(Me {

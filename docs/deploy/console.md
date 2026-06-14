@@ -2,7 +2,8 @@
 
 The console is a single binary that supervises the bundled apps (`linear`,
 `github`, `x`, `meeting-digest`, `standup-bot`) and serves a React admin UI.
-One process, one deploy.
+One process, one deploy. The admin API is self-documented — OpenAPI spec at
+`/api/openapi.json`, a Scalar explorer at `/api/docs`.
 
 ## Environment
 
@@ -57,9 +58,9 @@ The bundled `docker-compose.yml` covers the same setup with a named volume.
 
 If you put the console behind nginx/Caddy/Cloudflare:
 
-- The UI uses `Authorization: Bearer …` for HTTP and `?token=…` for SSE
-  (because `EventSource` doesn't support custom headers). Make sure your
-  proxy doesn't strip either.
+- Sign-in is a signed session **cookie** (`lk_session`), set on `/auth/callback`
+  and sent with every request (SSE included, since `EventSource` is same-origin).
+  Make sure your proxy forwards cookies and preserves `Set-Cookie`.
 - Disable response buffering for `/api/events` so SSE events arrive in real
   time (nginx: `proxy_buffering off;`, Caddy: `flush_interval -1`).
 - Forward `Last-Event-ID` so SSE clients can backfill after a reconnect.

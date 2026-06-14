@@ -10,36 +10,41 @@
 
 use std::sync::Arc;
 
+use axum::Json;
 use axum::extract::{Path as AxPath, State};
-use axum::http::StatusCode;
-use axum::{Json, response::IntoResponse};
 use larkstack_core::{LarkRegistry, default_base_url};
-use serde::Deserialize;
-use serde_json::{Value, json};
+use serde::{Deserialize, Serialize};
+use serde_json::json;
 use toml_edit::{DocumentMut, Item, Table, value};
 use tracing::info;
+use utoipa::ToSchema;
 
 use crate::HostState;
 
+use super::{ApiError, OkResponse};
+
 /// `GET /api/lark-apps` — the registry, `app_secret` redacted to a boolean.
-pub(crate) async fn list(State(s): State<HostState>) -> impl IntoResponse {
+#[utoipa::path(
+    get, path = "/lark-apps", tag = "console",
+    security(("session" = [])),
+    responses((status = 200, description = "Registered Lark apps (secrets redacted)", body = LarkAppsResponse)),
+)]
+pub(crate) async fn list(State(s): State<HostState>) -> Json<LarkAppsResponse> {
     let registry = parse_registry(&s.control.config());
-    let mut items: Vec<Value> = registry
+    let mut lark_apps: Vec<LarkAppView> = registry
         .iter()
-        .map(|(name, app)| {
-            json!({
-                "name": name,
-                "app_id": app.app_id,
-                "base_url": app.base_url,
-                "has_secret": !app.app_secret.is_empty(),
-            })
+        .map(|(name, app)| LarkAppView {
+            name: name.to_string(),
+            app_id: app.app_id.clone(),
+            base_url: app.base_url.clone(),
+            has_secret: !app.app_secret.is_empty(),
         })
         .collect();
-    items.sort_by(|a, b| a["name"].as_str().cmp(&b["name"].as_str()));
-    (StatusCode::OK, Json(json!({ "lark_apps": items })))
+    lark_apps.sort_by(|a, b| a.name.cmp(&b.name));
+    Json(LarkAppsResponse { lark_apps })
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 pub(crate) struct UpsertReq {
     name: String,
     app_id: String,
@@ -49,68 +54,72 @@ pub(crate) struct UpsertReq {
 
 /// `POST /api/lark-apps` — live-test the credentials, then write the entry.
 /// Nothing is persisted unless the test passes.
+#[utoipa::path(
+    post, path = "/lark-apps", tag = "console",
+    security(("session" = [])),
+    request_body = UpsertReq,
+    responses(
+        (status = 200, description = "Credentials valid and saved", body = UpsertAck),
+        (status = 400, description = "Invalid input or failed credential test", body = super::ErrorResponse),
+        (status = 500, description = "Could not write the config file", body = super::ErrorResponse),
+    ),
+)]
 pub(crate) async fn upsert(
     State(s): State<HostState>,
     Json(req): Json<UpsertReq>,
-) -> impl IntoResponse {
+) -> Result<Json<UpsertAck>, ApiError> {
     if !valid_name(&req.name) {
-        return bad("name must be non-empty and use only [A-Za-z0-9_-]");
+        return Err(ApiError::bad_request(
+            "name must be non-empty and use only [A-Za-z0-9_-]",
+        ));
     }
     if req.app_id.is_empty() || req.app_secret.is_empty() {
-        return bad("app_id and app_secret are required");
+        return Err(ApiError::bad_request("app_id and app_secret are required"));
     }
     let base_url = normalize_base_url(req.base_url);
 
     if let Err(e) = verify(&s.http, &req.app_id, &req.app_secret, &base_url).await {
-        return (
-            StatusCode::BAD_REQUEST,
-            Json(json!({ "error": format!("credential test failed: {e}") })),
-        );
+        return Err(ApiError::bad_request(format!(
+            "credential test failed: {e}"
+        )));
     }
 
-    let mut doc = match parse_doc(&s.control.config()) {
-        Ok(d) => d,
-        Err(e) => return server_error(e),
-    };
+    let mut doc = parse_doc(&s.control.config()).map_err(ApiError::internal)?;
     upsert_entry(&mut doc, &req.name, &req.app_id, &req.app_secret, &base_url);
-    match write_config(&s, doc) {
-        Ok(()) => {
-            info!(lark_app = %req.name, "lark-app credentials saved");
-            (
-                StatusCode::OK,
-                Json(json!({ "ok": true, "name": req.name })),
-            )
-        }
-        Err(e) => server_error(e),
-    }
+    write_config(&s, doc).map_err(ApiError::internal)?;
+    info!(lark_app = %req.name, "lark-app credentials saved");
+    Ok(Json(UpsertAck {
+        ok: true,
+        name: req.name,
+    }))
 }
 
 /// `DELETE /api/lark-apps/{name}` — drop an entry. Apps still referencing it
 /// will fail their next build (surfaced as Errored in the console).
+#[utoipa::path(
+    delete, path = "/lark-apps/{name}", tag = "console",
+    security(("session" = [])),
+    params(("name" = String, Path, description = "Registry entry name")),
+    responses(
+        (status = 200, description = "Entry removed", body = OkResponse),
+        (status = 404, description = "No such entry", body = super::ErrorResponse),
+        (status = 500, description = "Could not write the config file", body = super::ErrorResponse),
+    ),
+)]
 pub(crate) async fn delete(
     State(s): State<HostState>,
     AxPath(name): AxPath<String>,
-) -> impl IntoResponse {
-    let mut doc = match parse_doc(&s.control.config()) {
-        Ok(d) => d,
-        Err(e) => return server_error(e),
-    };
+) -> Result<Json<OkResponse>, ApiError> {
+    let mut doc = parse_doc(&s.control.config()).map_err(ApiError::internal)?;
     if !remove_entry(&mut doc, &name) {
-        return (
-            StatusCode::NOT_FOUND,
-            Json(json!({ "error": format!("no lark-app '{name}'") })),
-        );
+        return Err(ApiError::not_found(format!("no lark-app '{name}'")));
     }
-    match write_config(&s, doc) {
-        Ok(()) => {
-            info!(lark_app = %name, "lark-app deleted");
-            (StatusCode::OK, Json(json!({ "ok": true })))
-        }
-        Err(e) => server_error(e),
-    }
+    write_config(&s, doc).map_err(ApiError::internal)?;
+    info!(lark_app = %name, "lark-app deleted");
+    Ok(Json(OkResponse::ok()))
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 pub(crate) struct TestReq {
     app_id: String,
     app_secret: String,
@@ -119,17 +128,75 @@ pub(crate) struct TestReq {
 
 /// `POST /api/lark-apps/test` — dry-run a credential check without saving.
 /// Always `200`; the body's `ok` flag carries the verdict.
-pub(crate) async fn test(
-    State(s): State<HostState>,
-    Json(req): Json<TestReq>,
-) -> impl IntoResponse {
+#[utoipa::path(
+    post, path = "/lark-apps/test", tag = "console",
+    security(("session" = [])),
+    request_body = TestReq,
+    responses((status = 200, description = "Credential-test verdict", body = TestResult)),
+)]
+pub(crate) async fn test(State(s): State<HostState>, Json(req): Json<TestReq>) -> Json<TestResult> {
     if req.app_id.is_empty() || req.app_secret.is_empty() {
-        return Json(json!({ "ok": false, "error": "app_id and app_secret are required" }));
+        return Json(TestResult::err("app_id and app_secret are required"));
     }
     let base_url = normalize_base_url(req.base_url);
     match verify(&s.http, &req.app_id, &req.app_secret, &base_url).await {
-        Ok(expire) => Json(json!({ "ok": true, "expire": expire })),
-        Err(e) => Json(json!({ "ok": false, "error": e })),
+        Ok(expire) => Json(TestResult::ok(expire)),
+        Err(e) => Json(TestResult::err(e)),
+    }
+}
+
+// ---- response bodies -------------------------------------------------------
+
+/// Body of `GET /api/lark-apps`.
+#[derive(Serialize, ToSchema)]
+pub(crate) struct LarkAppsResponse {
+    lark_apps: Vec<LarkAppView>,
+}
+
+/// One registry entry, with the secret redacted to a flag.
+#[derive(Serialize, ToSchema)]
+pub(crate) struct LarkAppView {
+    name: String,
+    app_id: String,
+    base_url: String,
+    /// Whether an `app_secret` is stored (the secret itself is never returned).
+    has_secret: bool,
+}
+
+/// Body of a successful `POST /api/lark-apps`.
+#[derive(Serialize, ToSchema)]
+pub(crate) struct UpsertAck {
+    ok: bool,
+    name: String,
+}
+
+/// Body of `POST /api/lark-apps/test`: `ok` plus either the token lifetime or
+/// the failure reason.
+#[derive(Serialize, ToSchema)]
+pub(crate) struct TestResult {
+    ok: bool,
+    /// Token lifetime in seconds, on success.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    expire: Option<u64>,
+    /// Failure reason, on error.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    error: Option<String>,
+}
+
+impl TestResult {
+    fn ok(expire: u64) -> Self {
+        Self {
+            ok: true,
+            expire: Some(expire),
+            error: None,
+        }
+    }
+    fn err(error: impl Into<String>) -> Self {
+        Self {
+            ok: false,
+            expire: None,
+            error: Some(error.into()),
+        }
     }
 }
 
@@ -241,17 +308,6 @@ fn valid_name(name: &str) -> bool {
         && name
             .chars()
             .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
-}
-
-fn bad(msg: &str) -> (StatusCode, Json<Value>) {
-    (StatusCode::BAD_REQUEST, Json(json!({ "error": msg })))
-}
-
-fn server_error(msg: String) -> (StatusCode, Json<Value>) {
-    (
-        StatusCode::INTERNAL_SERVER_ERROR,
-        Json(json!({ "error": msg })),
-    )
 }
 
 #[cfg(test)]
