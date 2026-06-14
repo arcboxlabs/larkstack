@@ -1,13 +1,8 @@
-//! Linear-specific helpers: signature verification and change detection.
+//! Change detection — diffs an updated issue against its previous state to
+//! produce human-readable change lines for the notification card.
 
-use crate::model::Priority;
-
-use super::models::{Issue, UpdatedFrom};
-
-/// Verifies the `linear-signature` header using HMAC-SHA256.
-pub fn verify_signature(secret: &str, body: &[u8], signature: &str) -> bool {
-    lark_kit::verify_hmac_sha256(secret, body, signature)
-}
+use super::payload::{Issue, UpdatedFrom};
+use crate::domain::Priority;
 
 /// Compares the current [`Issue`] state against `updated_from` and returns
 /// human-readable change descriptions (e.g. `"**Status:** Todo → In Progress"`).

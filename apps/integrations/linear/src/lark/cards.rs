@@ -4,8 +4,8 @@ use lark_kit::card::{LarkCard, LarkMessage, card, link_button, md_div, message};
 use lark_kit::truncate;
 use serde_json::{Value, json};
 
-use crate::model::{IssueNotification, Priority};
-use crate::source::models::LinearIssueData;
+use crate::domain::{IssueNotification, Priority};
+use crate::source::api::LinearIssueData;
 
 fn priority_color(priority: &Priority) -> &'static str {
     match priority {

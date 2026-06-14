@@ -75,25 +75,3 @@ pub struct Actor {
     #[allow(dead_code)]
     pub email: Option<String>,
 }
-
-/// Issue data returned by the Linear GraphQL API.
-#[derive(Debug, Deserialize)]
-pub struct LinearIssueData {
-    pub title: String,
-    pub description: Option<String>,
-    pub priority: u8,
-    pub state: LinearIssueState,
-    pub assignee: Option<LinearIssueAssignee>,
-    pub url: String,
-    pub identifier: String,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct LinearIssueState {
-    pub name: String,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct LinearIssueAssignee {
-    pub name: String,
-}

@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 use tokio::sync::{Mutex, oneshot};
 
-use crate::model::IssueNotification;
+use super::IssueNotification;
 
 /// A pending notification waiting for the debounce window to expire.
 pub struct PendingUpdate {

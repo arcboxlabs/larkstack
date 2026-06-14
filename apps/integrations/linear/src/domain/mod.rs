@@ -1,4 +1,7 @@
-//! The Linear source's normalized output — what flows through debounce to cards.
+//! The normalized core — source-agnostic types that flow from the Linear
+//! adapter through [`debounce`] to the Lark cards.
+
+pub mod debounce;
 
 /// Issue priority, normalized from Linear's `0`–`4` scale.
 pub enum Priority {

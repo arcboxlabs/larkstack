@@ -1,8 +1,9 @@
-//! Linear webhook source — receives issue/comment events and normalizes them.
+//! Linear adapter — the external system this app bridges from.
+//!
+//! [`payload`] deserializes inbound webhook events, [`changes`] diffs an
+//! updated issue against its previous state, and [`api`] queries Linear's
+//! GraphQL API for link previews.
 
-pub mod client;
-mod handler;
-pub mod models;
-mod utils;
-
-pub use handler::webhook_handler;
+pub mod api;
+pub mod changes;
+pub mod payload;

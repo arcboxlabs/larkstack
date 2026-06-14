@@ -9,6 +9,9 @@ use tokio_util::sync::CancellationToken;
 
 use crate::config::AppState;
 
+mod preview;
+mod webhook;
+
 async fn health() -> &'static str {
     "ok"
 }
@@ -17,11 +20,8 @@ async fn health() -> &'static str {
 pub async fn serve(state: Arc<AppState>, cancel: CancellationToken) -> anyhow::Result<()> {
     let port = state.server.port;
     let app = Router::new()
-        .route("/webhook", post(crate::source::webhook_handler))
-        .route(
-            "/lark/event",
-            post(crate::event_handler::lark_event_handler),
-        )
+        .route("/webhook", post(webhook::webhook_handler))
+        .route("/lark/event", post(preview::lark_event_handler))
         .route("/health", get(health))
         .with_state(state);
     lark_kit::server::serve("linear", app, port, cancel).await

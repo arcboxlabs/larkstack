@@ -9,9 +9,9 @@ use lark_kit::event::{Callback, classify, inline_card};
 use serde_json::{Value, json};
 use tracing::{error, info};
 
-use crate::cards;
 use crate::config::AppState;
-use crate::source::client::extract_identifier_from_url;
+use crate::lark::cards;
+use crate::source::api::extract_identifier_from_url;
 
 pub async fn lark_event_handler(
     State(state): State<Arc<AppState>>,

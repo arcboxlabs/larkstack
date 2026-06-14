@@ -31,12 +31,21 @@ impl App for LinearApp {
     async fn build(
         &self,
         config: &str,
-        _services: AppServices,
+        services: AppServices,
     ) -> anyhow::Result<Arc<dyn Instance>> {
-        let state = AppState::from_toml(config).map_err(|e| anyhow::anyhow!("config: {e}"))?;
+        let state =
+            AppState::from_toml(config, services.db).map_err(|e| anyhow::anyhow!("config: {e}"))?;
         Ok(Arc::new(LinearInstance {
             state: Arc::new(state),
         }))
+    }
+
+    fn migrations(&self) -> Vec<Box<dyn sea_orm_migration::MigrationTrait>> {
+        crate::user_map::migrations()
+    }
+
+    fn routes(&self, services: &AppServices) -> Option<axum::Router> {
+        Some(crate::user_map::router(services.db.clone()))
     }
 }
 
@@ -47,7 +56,7 @@ struct LinearInstance {
 #[async_trait]
 impl Instance for LinearInstance {
     async fn run(&self, cancel: CancellationToken) -> anyhow::Result<()> {
-        crate::run::serve(self.state.clone(), cancel).await
+        crate::routes::serve(self.state.clone(), cancel).await
     }
 
     async fn handle_action(&self, action: &str, params: Value) -> anyhow::Result<String> {

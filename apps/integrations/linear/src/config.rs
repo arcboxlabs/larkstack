@@ -1,11 +1,12 @@
 use lark_kit::{LarkBotClient, LarkConfig, ServerConfig, TomlLark};
 use larkstack_core::LarkRegistry;
 use reqwest::Client;
+use sea_orm::DatabaseConnection;
 use serde::Deserialize;
 use tracing::info;
 
-use crate::debounce::DebounceMap;
-use crate::source::client::LinearClient;
+use crate::domain::debounce::DebounceMap;
+use crate::source::api::LinearClient;
 
 fn default_debounce() -> u64 {
     5000
@@ -48,6 +49,8 @@ pub struct AppState {
     pub bot: Option<LarkBotClient>,
     pub linear_client: Option<LinearClient>,
     pub debounce: DebounceMap,
+    /// Shared App database — backs the [`user_map`](crate::user_map) overrides.
+    pub db: DatabaseConnection,
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -77,7 +80,7 @@ struct TomlServer {
 }
 
 impl AppState {
-    pub fn from_env() -> Self {
+    pub fn from_env(db: DatabaseConnection) -> Self {
         let debounce_delay_ms = std::env::var("DEBOUNCE_DELAY_MS")
             .ok()
             .and_then(|s| s.parse().ok())
@@ -87,11 +90,12 @@ impl AppState {
             LarkConfig::from_env().expect("invalid lark config"),
             ServerConfig::from_env().expect("invalid server config"),
             debounce_delay_ms,
+            db,
         )
     }
 
     /// Build state from a full config TOML containing a `[linear]` section.
-    pub fn from_toml(full_toml: &str) -> Result<Self, Box<figment::Error>> {
+    pub fn from_toml(full_toml: &str, db: DatabaseConnection) -> Result<Self, Box<figment::Error>> {
         let top: TopLevel =
             toml::from_str(full_toml).map_err(|e| Box::new(figment::Error::from(e.to_string())))?;
         let section = top.linear;
@@ -126,7 +130,13 @@ impl AppState {
                 .unwrap_or_else(default_debounce)
         });
 
-        Ok(Self::from_parts(linear, lark, server, debounce_delay_ms))
+        Ok(Self::from_parts(
+            linear,
+            lark,
+            server,
+            debounce_delay_ms,
+            db,
+        ))
     }
 
     fn from_parts(
@@ -134,6 +144,7 @@ impl AppState {
         lark: LarkConfig,
         server: ServerConfig,
         debounce_delay_ms: u64,
+        db: DatabaseConnection,
     ) -> Self {
         let http = Client::new();
         let bot = lark.bot_client(&http);
@@ -148,6 +159,7 @@ impl AppState {
             bot,
             linear_client,
             debounce: DebounceMap::new(),
+            db,
         }
     }
 }

@@ -1,0 +1,20 @@
+query IssueByNumber($teamKey: String!, $number: Float!) {
+  issues(
+    filter: { number: { eq: $number }, team: { key: { eq: $teamKey } } }
+    first: 1
+  ) {
+    nodes {
+      title
+      description
+      priority
+      identifier
+      url
+      state {
+        name
+      }
+      assignee {
+        name
+      }
+    }
+  }
+}

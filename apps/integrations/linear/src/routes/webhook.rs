@@ -11,12 +11,12 @@ use axum::{
 };
 use tracing::{error, info, warn};
 
-use super::models::{Actor, CommentData, Issue, LinearPayload, UpdatedFrom};
-use super::utils::{build_change_fields, verify_signature};
 use crate::config::AppState;
-use crate::debounce::PendingUpdate;
-use crate::model::{IssueNotification, Priority};
-use crate::{cards, notify};
+use crate::domain::debounce::PendingUpdate;
+use crate::domain::{IssueNotification, Priority};
+use crate::lark::{cards, notify};
+use crate::source::changes::build_change_fields;
+use crate::source::payload::{Actor, CommentData, Issue, LinearPayload, UpdatedFrom};
 
 /// Handles incoming Linear webhook requests.
 ///
@@ -35,7 +35,7 @@ pub async fn webhook_handler(
         warn!("missing linear-signature header");
         return StatusCode::UNAUTHORIZED;
     };
-    if !verify_signature(&state.linear.webhook_secret, &body, signature) {
+    if !lark_kit::verify_hmac_sha256(&state.linear.webhook_secret, &body, signature) {
         warn!("invalid webhook signature");
         return StatusCode::UNAUTHORIZED;
     }
@@ -188,8 +188,11 @@ async fn send_debounced(state: &AppState, pending: PendingUpdate) {
     info!("sending debounced {kind} – changes: {changes}");
 
     notify::group(state, &cards::issue_card(&pending.notif)).await;
-    if let Some(email) = &pending.dm_email {
-        notify::dm(state, email, &cards::assign_dm(&pending.notif)).await;
+    if let Some(linear_email) = &pending.dm_email {
+        // The webhook gives us the assignee's Linear email; resolve it to their
+        // Lark email through the admin override table (no-op when they match).
+        let lark_email = crate::user_map::resolve_lark_email(&state.db, linear_email).await;
+        notify::dm(state, &lark_email, &cards::assign_dm(&pending.notif)).await;
     }
 }
 
