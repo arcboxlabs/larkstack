@@ -1,0 +1,29 @@
+[[repos]]
+repo = "local"
+
+[[repos.hooks]]
+id = "cargo-fmt"
+name = "cargo fmt"
+description = "Run Rust formatting check"
+entry = "cargo fmt --all -- --check"
+language = "system"
+types = ["rust"]
+pass_filenames = false
+
+[[repos.hooks]]
+id = "cargo-clippy"
+name = "cargo clippy"
+description = "Run Rust lints across the workspace"
+entry = "cargo clippy --workspace --all-targets -- -D warnings"
+language = "system"
+types = ["rust"]
+pass_filenames = false
+
+[[repos.hooks]]
+id = "dashboard-biome"
+name = "dashboard biome"
+description = "Run Biome checks for the dashboard"
+entry = "pnpm --dir dashboard check"
+language = "system"
+files = "^dashboard/"
+pass_filenames = false

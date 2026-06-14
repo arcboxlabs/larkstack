@@ -58,7 +58,9 @@ export function Status() {
                 </span>
               </header>
               {s.message && <p className="status-msg">{s.message}</p>}
-              <footer className="muted">updated {freshness(s.updated_at)}</footer>
+              <footer className="muted">
+                updated {freshness(s.updated_at)}
+              </footer>
             </article>
           ))}
         </div>

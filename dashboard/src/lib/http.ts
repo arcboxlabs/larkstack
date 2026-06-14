@@ -1,5 +1,5 @@
-import { mutate } from "swr";
 import type { SWRConfiguration } from "swr";
+import { mutate } from "swr";
 
 /// Error thrown by the fetchers below for any non-2xx response. Carries the
 /// status (so callers / the global handler can branch on 401) and the parsed

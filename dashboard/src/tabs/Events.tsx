@@ -1,8 +1,8 @@
-import { useMemo } from "react";
-import type { ReactNode } from "react";
 import { Select } from "@base-ui/react/select";
 import { useLocalStorage } from "foxact/use-local-storage";
-import { useEvents, type Level } from "../lib/useEvents";
+import type { ReactNode } from "react";
+import { useMemo } from "react";
+import { type Level, useEvents } from "../lib/useEvents";
 
 const LEVEL_ORDER: Record<Level, number> = {
   trace: 0,
@@ -141,7 +141,9 @@ export function Events() {
           <span className={`conn ${connected ? "ok" : "down"}`}>
             {connected ? "● live" : "○ reconnecting"}
           </span>
-          {laggedCount > 0 && <span className="lag">dropped {laggedCount}</span>}
+          {laggedCount > 0 && (
+            <span className="lag">dropped {laggedCount}</span>
+          )}
         </div>
       </header>
       <ul className="log">

@@ -6,7 +6,13 @@ import { App } from "./App.tsx";
 import { swrConfig } from "./lib/http.ts";
 import "./styles.css";
 
-createRoot(document.getElementById("root")!).render(
+const root = document.getElementById("root");
+
+if (!root) {
+  throw new Error("Missing #root element");
+}
+
+createRoot(root).render(
   <StrictMode>
     <SWRConfig value={swrConfig}>
       <BrowserRouter>

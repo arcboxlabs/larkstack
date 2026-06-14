@@ -1,7 +1,7 @@
-import { useState } from "react";
 import { AlertDialog } from "@base-ui/react/alert-dialog";
 import { Button } from "@base-ui/react/button";
 import { Field } from "@base-ui/react/field";
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import useSWR from "swr";
 import useSWRMutation from "swr/mutation";
@@ -104,7 +104,10 @@ export function LarkApps() {
     setFeedback(null);
     const form = getValues();
     if (!form.app_id.trim() || !form.app_secret) {
-      setFeedback({ tone: "error", text: "app_id and app_secret are required" });
+      setFeedback({
+        tone: "error",
+        text: "app_id and app_secret are required",
+      });
       return;
     }
     try {
@@ -132,7 +135,12 @@ export function LarkApps() {
   };
 
   const onEdit = (a: LarkAppRow) => {
-    reset({ name: a.name, app_id: a.app_id, app_secret: "", base_url: a.base_url });
+    reset({
+      name: a.name,
+      app_id: a.app_id,
+      app_secret: "",
+      base_url: a.base_url,
+    });
     setEditing(a.name);
     setFeedback(null);
   };
@@ -144,8 +152,8 @@ export function LarkApps() {
       <h2>Lark Apps</h2>
       <p className="muted help-text">
         Credentials are shared here and referenced from an app's config with{" "}
-        <code>lark_app = "&lt;name&gt;"</code>. Saving live-tests the credentials
-        against Lark and only persists if they work.
+        <code>lark_app = "&lt;name&gt;"</code>. Saving live-tests the
+        credentials against Lark and only persists if they work.
       </p>
 
       <div className="action-card">
@@ -193,7 +201,9 @@ export function LarkApps() {
               type="password"
               autoComplete="off"
               placeholder="write-only — re-enter to update"
-              {...register("app_secret", { required: "app_secret is required" })}
+              {...register("app_secret", {
+                required: "app_secret is required",
+              })}
             />
             {errors.app_secret && (
               <Field.Error className="field-error" match>
@@ -248,7 +258,11 @@ export function LarkApps() {
                 </td>
                 <td className="muted">{a.base_url}</td>
                 <td>
-                  {a.has_secret ? "set" : <span className="error">missing</span>}
+                  {a.has_secret ? (
+                    "set"
+                  ) : (
+                    <span className="error">missing</span>
+                  )}
                 </td>
                 <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
                   <Button className="action-btn" onClick={() => onEdit(a)}>
