@@ -1,22 +1,14 @@
 # Lark Stack - Integration Hub for Lark
 
-<p align="center">
-  <strong>An open-source integration hub for Lark / Feishu</strong> — a Slack-grade ecosystem in one self-hosted binary.
-  <br>
-  One process supervises every integration and automation, with a React console for status, config, and one-shot actions.
-</p>
+**An open-source integration hub for Lark / Feishu** — a Slack-grade ecosystem in one self-hosted binary.
 
-<p align="center">
-  <img src="https://img.shields.io/badge/Rust-Edition_2024-orange.svg" alt="Rust">
-  <img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License">
-</p>
+One process supervises every integration and automation, with a React console for status, config, and one-shot actions.
 
-<br>
+![Rust](https://img.shields.io/badge/Rust-Edition_2024-orange.svg)
+![License](https://img.shields.io/badge/License-MIT-blue.svg)
 
-<p align="center">
-  <a href="./README.md"><img alt="README in English" src="https://img.shields.io/badge/English-d9d9d9"></a>
-  <a href="./README_CN.md"><img alt="简体中文 README" src="https://img.shields.io/badge/简体中文-d9d9d9"></a>
-</p>
+[![README in English](https://img.shields.io/badge/English-d9d9d9)](./README.md)
+[![简体中文 README](https://img.shields.io/badge/简体中文-d9d9d9)](./README_CN.md)
 
 <hr>
 
@@ -36,11 +28,14 @@ Apps are pluggable units the console supervises and toggles. **Integrations** br
 
 | App | Kind | What it does |
 | :--- | :--- | :--- |
-| [`linear`](./apps/integrations/linear) | Integration | Linear webhook → Lark notification cards + issue link previews |
-| [`github`](./apps/integrations/github) | Integration | GitHub webhook → PR/issue/CI/security-alert cards + review-request DMs |
-| [`x`](./apps/integrations/x) | Integration | X (Twitter) link previews rendered as Lark cards (preview-only) |
-| [`minutes`](./apps/automations/minutes) | Automation | Auto-transcribe Lark VC recordings (STT) → digest cards + optional Lark Doc |
-| [`standup`](./apps/automations/standup) | Automation | Daily standup reminders + on-demand commands (announce/remind/urgent/check) |
+| [`Linear`](./apps/integrations/linear) | ![Integration][kind-integration] | Linear webhook → Lark notification cards + issue link previews |
+| [`GitHub`](./apps/integrations/github) | ![Integration][kind-integration] | GitHub webhook → PR/issue/CI/security-alert cards + review-request DMs |
+| [`X`](./apps/integrations/x) | ![Integration][kind-integration] | X (Twitter) link previews rendered as Lark cards (preview-only) |
+| [`Minutes`](./apps/automations/minutes) | ![Automation][kind-automation] | Auto-transcribe Lark VC recordings (STT) → digest cards + optional Lark Doc |
+| [`Standup`](./apps/automations/standup) | ![Automation][kind-automation] | Daily standup reminders + on-demand commands (announce/remind/urgent/check) |
+
+[kind-integration]: https://img.shields.io/badge/Integration-2563eb?style=flat-square
+[kind-automation]: https://img.shields.io/badge/Automation-16a34a?style=flat-square
 
 The three integrations each run their own inbound HTTP server on a distinct port (linear `:3000`, github `:3001`, x `:3002`).
 

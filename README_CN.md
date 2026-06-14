@@ -1,22 +1,14 @@
 # Lark Stack - 开源的飞书应用中心
 
-<p align="center">
-  <strong>面向 Lark / 飞书的开源集成中枢</strong>——用一个自托管二进制，构建匹敌 Slack 级别的生态。
-  <br>
-  一个进程监管所有集成与自动化，自带 React 控制台（状态、配置、动作触发）。
-</p>
+**面向 Lark / 飞书的开源集成中枢**——用一个自托管二进制，构建匹敌 Slack 级别的生态。
 
-<p align="center">
-  <img src="https://img.shields.io/badge/Rust-Edition_2024-orange.svg" alt="Rust">
-  <img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License">
-</p>
+一个进程监管所有集成与自动化，自带 React 控制台（状态、配置、动作触发）。
 
-<br>
-  
-<p align="center">
-  <a href="./README.md"><img alt="README in English" src="https://img.shields.io/badge/English-d9d9d9"></a>
-  <a href="./README_CN.md"><img alt="简体中文 README" src="https://img.shields.io/badge/简体中文-d9d9d9"></a>
-</p>
+![Rust](https://img.shields.io/badge/Rust-Edition_2024-orange.svg)
+![License](https://img.shields.io/badge/License-MIT-blue.svg)
+
+[![README in English](https://img.shields.io/badge/English-d9d9d9)](./README.md)
+[![简体中文 README](https://img.shields.io/badge/简体中文-d9d9d9)](./README_CN.md)
 
 <hr>
 
@@ -36,11 +28,14 @@ App 是控制台监管和开关的可插拔单元。**Integration** 把外部系
 
 | App | 类型 | 功能 |
 | :--- | :--- | :--- |
-| [`linear`](./apps/integrations/linear) | Integration | Linear webhook → 飞书通知卡片 + issue 链接预览 |
-| [`github`](./apps/integrations/github) | Integration | GitHub webhook → PR/issue/CI/安全告警卡片 + review 请求私信 |
-| [`x`](./apps/integrations/x) | Integration | X（Twitter）链接预览，渲染为飞书卡片（仅预览） |
-| [`minutes`](./apps/automations/minutes) | Automation | 自动转写飞书 VC 录制（STT）→ 摘要卡片 + 可选飞书文档 |
-| [`standup`](./apps/automations/standup) | Automation | 每日站会提醒 + 一次性命令（announce/remind/urgent/check） |
+| [`Linear`](./apps/integrations/linear) | ![Integration][kind-integration] | Linear webhook → 飞书通知卡片 + issue 链接预览 |
+| [`GitHub`](./apps/integrations/github) | ![Integration][kind-integration] | GitHub webhook → PR/issue/CI/安全告警卡片 + review 请求私信 |
+| [`X`](./apps/integrations/x) | ![Integration][kind-integration] | X（Twitter）链接预览，渲染为飞书卡片（仅预览） |
+| [`Minutes`](./apps/automations/minutes) | ![Automation][kind-automation] | 自动转写飞书 VC 录制（STT）→ 摘要卡片 + 可选飞书文档 |
+| [`Standup`](./apps/automations/standup) | ![Automation][kind-automation] | 每日站会提醒 + 一次性命令（announce/remind/urgent/check） |
+
+[kind-integration]: https://img.shields.io/badge/Integration-2563eb?style=flat-square
+[kind-automation]: https://img.shields.io/badge/Automation-16a34a?style=flat-square
 
 三个 integration 各自运行独立的入站 HTTP 服务，端口互不相同（linear `:3000`、github `:3001`、x `:3002`）。
 
