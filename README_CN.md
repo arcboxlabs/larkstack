@@ -28,11 +28,14 @@ App 是控制台监管和开关的可插拔单元。**Integration** 把外部系
 
 | App | 类型 | 功能 |
 | :--- | :--- | :--- |
-| [`linear`](./apps/integrations/linear) | Integration | Linear webhook → 飞书通知卡片 + issue 链接预览 |
-| [`github`](./apps/integrations/github) | Integration | GitHub webhook → PR/issue/CI/安全告警卡片 + review 请求私信 |
-| [`x`](./apps/integrations/x) | Integration | X（Twitter）链接预览，渲染为飞书卡片（仅预览） |
-| [`minutes`](./apps/automations/minutes) | Automation | 自动转写飞书 VC 录制（STT）→ 摘要卡片 + 可选飞书文档 |
-| [`standup`](./apps/automations/standup) | Automation | 每日站会提醒 + 一次性命令（announce/remind/urgent/check） |
+| [`Linear`](./apps/integrations/linear) | ![Integration][kind-integration] | Linear webhook → 飞书通知卡片 + issue 链接预览 |
+| [`GitHub`](./apps/integrations/github) | ![Integration][kind-integration] | GitHub webhook → PR/issue/CI/安全告警卡片 + review 请求私信 |
+| [`X`](./apps/integrations/x) | ![Integration][kind-integration] | X（Twitter）链接预览，渲染为飞书卡片（仅预览） |
+| [`Minutes`](./apps/automations/minutes) | ![Automation][kind-automation] | 自动转写飞书 VC 录制（STT）→ 摘要卡片 + 可选飞书文档 |
+| [`Standup`](./apps/automations/standup) | ![Automation][kind-automation] | 每日站会提醒 + 一次性命令（announce/remind/urgent/check） |
+
+[kind-integration]: https://img.shields.io/badge/Integration-2563eb?style=flat-square
+[kind-automation]: https://img.shields.io/badge/Automation-16a34a?style=flat-square
 
 三个 integration 各自运行独立的入站 HTTP 服务，端口互不相同（linear `:3000`、github `:3001`、x `:3002`）。
 

@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
 import { AlertDialog } from "@base-ui/react/alert-dialog";
 import { Button } from "@base-ui/react/button";
 import { Field } from "@base-ui/react/field";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import useSWR from "swr";
 import useSWRMutation from "swr/mutation";
@@ -114,9 +114,9 @@ function SettingsCard() {
       {error && <p className="error">Failed to load: {errMessage(error)}</p>}
 
       <p className="muted help-text">
-        Subscriber fan-out &amp; due-date reminders need <code>LINEAR_API_KEY</code>{" "}
-        set (to resolve subscriber emails / poll due dates). Changes apply live —
-        no restart.
+        Subscriber fan-out &amp; due-date reminders need{" "}
+        <code>LINEAR_API_KEY</code> set (to resolve subscriber emails / poll due
+        dates). Changes apply live — no restart.
       </p>
 
       <div className="action-fields">
@@ -139,10 +139,7 @@ function SettingsCard() {
 
         <Field.Root className="field">
           <Field.Label className="field-label">Reminder recipients</Field.Label>
-          <select
-            className="field-input"
-            {...register("reminder_recipients")}
-          >
+          <select className="field-input" {...register("reminder_recipients")}>
             <option value="assignee">Assignee only</option>
             <option value="assignee_and_subscribers">
               Assignee + all subscribers
@@ -151,9 +148,7 @@ function SettingsCard() {
         </Field.Root>
 
         <Field.Root className="field">
-          <Field.Label className="field-label">
-            Reminder lead days
-          </Field.Label>
+          <Field.Label className="field-label">Reminder lead days</Field.Label>
           <Field.Control
             className="field-input"
             placeholder="7, 3, 1, 0"
@@ -228,7 +223,11 @@ interface MappingForm {
   note: string;
 }
 
-const EMPTY_MAPPING: MappingForm = { linear_email: "", lark_email: "", note: "" };
+const EMPTY_MAPPING: MappingForm = {
+  linear_email: "",
+  lark_email: "",
+  note: "",
+};
 
 function UserMapCard() {
   const { data, error, mutate } = useSWR<Mapping[]>(
@@ -293,8 +292,8 @@ function UserMapCard() {
     <div className="action-card" style={{ marginTop: "1.5rem" }}>
       <div className="actions-subsystem">user map (Linear → Lark email)</div>
       <p className="muted help-text">
-        Override the DM target when a person's Linear and Lark emails differ. When
-        they match, no entry is needed.
+        Override the DM target when a person's Linear and Lark emails differ.
+        When they match, no entry is needed.
       </p>
 
       <div className="action-fields">
@@ -305,7 +304,9 @@ function UserMapCard() {
           <Field.Control
             className="field-input"
             placeholder="alice@linear.example"
-            {...register("linear_email", { required: "linear_email is required" })}
+            {...register("linear_email", {
+              required: "linear_email is required",
+            })}
           />
           {errors.linear_email && (
             <Field.Error className="field-error" match>

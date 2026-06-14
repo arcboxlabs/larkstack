@@ -16,9 +16,9 @@
   };
 
   # Frontend toolchain — Node.js + pnpm for the dashboard (dashboard/).
-  # Pin a Node version with `package = pkgs.nodejs_22;` if needed.
   languages.javascript = {
     enable = true;
+    package = pkgs.nodejs_24;
     pnpm.enable = true;
   };
 
@@ -27,6 +27,7 @@
     pkgs.protobuf
     pkgs.pkg-config
     pkgs.curl
+    pkgs.prek
   ];
 
   env.PROTOC = "${pkgs.protobuf}/bin/protoc";
@@ -51,6 +52,22 @@
       } > "$tmp"
       mv "$tmp" "$dest"
       echo "updated $dest ($(wc -l < "$dest") lines)"
+    '';
+  };
+
+  scripts.console = {
+    description = "Run the larkstack console backend on :8080";
+    exec = ''
+      cargo run -p console
+    '';
+  };
+
+  scripts.dashboard = {
+    description = "Run the dashboard Vite dev server";
+    exec = ''
+      root="$(git rev-parse --show-toplevel)"
+      cd "$root/dashboard"
+      pnpm dev
     '';
   };
 }

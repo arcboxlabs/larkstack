@@ -1,7 +1,8 @@
-import { Tabs } from "@base-ui/react/tabs";
 import { Button } from "@base-ui/react/button";
+import { Tabs } from "@base-ui/react/tabs";
 import { Link, Outlet, useLocation } from "react-router";
 import { logout, useMe } from "../lib/auth";
+import { OpenConsoleBanner } from "./OpenConsoleBanner";
 
 const TABS = [
   { to: "/status", label: "Status" },
@@ -25,7 +26,7 @@ export function Layout() {
   return (
     <div className="app">
       <header className="app-header">
-        <div className="app-title">larkstack console</div>
+        <div className="app-title">LarkStack Console</div>
         <Tabs.Root value={current}>
           <Tabs.List className="tabs">
             {TABS.map((t) => (
@@ -60,6 +61,7 @@ export function Layout() {
         )}
       </header>
       <main>
+        <OpenConsoleBanner />
         <Outlet />
       </main>
     </div>

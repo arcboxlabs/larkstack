@@ -7,6 +7,7 @@ import { Config } from "./tabs/Config";
 import { Events } from "./tabs/Events";
 import { LarkApps } from "./tabs/LarkApps";
 import { Linear } from "./tabs/Linear";
+import { Setup } from "./tabs/Setup";
 import { Status } from "./tabs/Status";
 
 export function App() {
@@ -23,17 +24,22 @@ export function App() {
     return <Login />;
   }
 
+  // First run (console still open) lands on the guided Setup screen; once
+  // sign-in is enforced, the default view is Status.
+  const home = me.auth_required ? "/status" : "/setup";
+
   return (
     <Routes>
       <Route element={<Layout />}>
-        <Route index element={<Navigate to="/status" replace />} />
+        <Route index element={<Navigate to={home} replace />} />
+        <Route path="setup" element={<Setup />} />
         <Route path="status" element={<Status />} />
         <Route path="actions" element={<Actions />} />
         <Route path="lark-apps" element={<LarkApps />} />
         <Route path="linear" element={<Linear />} />
         <Route path="config" element={<Config />} />
         <Route path="events" element={<Events />} />
-        <Route path="*" element={<Navigate to="/status" replace />} />
+        <Route path="*" element={<Navigate to={home} replace />} />
       </Route>
     </Routes>
   );

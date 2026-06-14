@@ -1,6 +1,6 @@
-import { useState } from "react";
 import { Button } from "@base-ui/react/button";
 import { Field } from "@base-ui/react/field";
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { Link } from "react-router";
 import useSWRMutation from "swr/mutation";
@@ -21,44 +21,112 @@ interface Action {
 
 const CATALOG: Record<string, Action[]> = {
   linear: [
-    { name: "ping", description: "Emit a pong log event (smoke test the action plumbing)" },
-    { name: "test-lark", description: "Post a test message to the configured Lark webhook" },
+    {
+      name: "ping",
+      description: "Emit a pong log event (smoke test the action plumbing)",
+    },
+    {
+      name: "test-lark",
+      description: "Post a test message to the configured Lark webhook",
+    },
   ],
   github: [
-    { name: "ping", description: "Emit a pong log event (smoke test the action plumbing)" },
-    { name: "test-lark", description: "Post a test message to the configured Lark webhook" },
+    {
+      name: "ping",
+      description: "Emit a pong log event (smoke test the action plumbing)",
+    },
+    {
+      name: "test-lark",
+      description: "Post a test message to the configured Lark webhook",
+    },
   ],
-  x: [{ name: "ping", description: "Emit a pong log event (smoke test the action plumbing)" }],
-  "standup": [
-    { name: "announce", description: "Ensure tomorrow's doc and post the announcement card",
-      params: [{ name: "date", label: "date (today | tomorrow | YYYY-MM-DD)", placeholder: "tomorrow" }] },
-    { name: "ensure", description: "Create tomorrow's doc + share with chat (no card)",
-      params: [{ name: "date", label: "date", placeholder: "tomorrow" }] },
-    { name: "remind", description: "DM everyone still empty for today's doc",
-      params: [{ name: "date", label: "date", placeholder: "today" }] },
-    { name: "urgent", description: "Remind + in-app urgent escalation for today's doc",
-      params: [{ name: "date", label: "date", placeholder: "today" }] },
-    { name: "check", description: "List missing fillers for today (read-only)",
-      params: [{ name: "date", label: "date", placeholder: "today" }] },
-    { name: "urgent-user", description: "Escalate one specific user (for testing)",
+  x: [
+    {
+      name: "ping",
+      description: "Emit a pong log event (smoke test the action plumbing)",
+    },
+  ],
+  standup: [
+    {
+      name: "announce",
+      description: "Ensure tomorrow's doc and post the announcement card",
       params: [
-        { name: "open_id", label: "open_id", required: true, placeholder: "ou_xxx" },
+        {
+          name: "date",
+          label: "date (today | tomorrow | YYYY-MM-DD)",
+          placeholder: "tomorrow",
+        },
+      ],
+    },
+    {
+      name: "ensure",
+      description: "Create tomorrow's doc + share with chat (no card)",
+      params: [{ name: "date", label: "date", placeholder: "tomorrow" }],
+    },
+    {
+      name: "remind",
+      description: "DM everyone still empty for today's doc",
+      params: [{ name: "date", label: "date", placeholder: "today" }],
+    },
+    {
+      name: "urgent",
+      description: "Remind + in-app urgent escalation for today's doc",
+      params: [{ name: "date", label: "date", placeholder: "today" }],
+    },
+    {
+      name: "check",
+      description: "List missing fillers for today (read-only)",
+      params: [{ name: "date", label: "date", placeholder: "today" }],
+    },
+    {
+      name: "urgent-user",
+      description: "Escalate one specific user (for testing)",
+      params: [
+        {
+          name: "open_id",
+          label: "open_id",
+          required: true,
+          placeholder: "ou_xxx",
+        },
         { name: "date", label: "date", placeholder: "today" },
-      ] },
+      ],
+    },
   ],
-  "minutes": [
-    { name: "process-meeting", description: "Backfill / re-process one meeting by ID",
+  minutes: [
+    {
+      name: "process-meeting",
+      description: "Backfill / re-process one meeting by ID",
       params: [
-        { name: "meeting_id", label: "meeting_id", required: true, placeholder: "VC meeting ID" },
-        { name: "owner", label: "owner (optional override)", placeholder: "open_id" },
-        { name: "url", label: "url (skip VC lookup, use this URL)", placeholder: "https://…" },
-      ] },
+        {
+          name: "meeting_id",
+          label: "meeting_id",
+          required: true,
+          placeholder: "VC meeting ID",
+        },
+        {
+          name: "owner",
+          label: "owner (optional override)",
+          placeholder: "open_id",
+        },
+        {
+          name: "url",
+          label: "url (skip VC lookup, use this URL)",
+          placeholder: "https://…",
+        },
+      ],
+    },
   ],
 };
 
 type RunState = { tone: "ok" | "error"; text: string } | null;
 
-function ActionCard({ subsystem, action }: { subsystem: string; action: Action }) {
+function ActionCard({
+  subsystem,
+  action,
+}: {
+  subsystem: string;
+  action: Action;
+}) {
   const params = action.params ?? [];
   const defaults: Record<string, string> = {};
   for (const p of params) defaults[p.name] = "";
@@ -81,7 +149,9 @@ function ActionCard({ subsystem, action }: { subsystem: string; action: Action }
     setResult(null);
     // Send required fields always; drop empty optionals so JSON carries only
     // real values (and `null` when nothing is left).
-    const required = new Set(params.filter((p) => p.required).map((p) => p.name));
+    const required = new Set(
+      params.filter((p) => p.required).map((p) => p.name),
+    );
     const body: Record<string, string> = {};
     for (const [k, v] of Object.entries(values)) {
       const trimmed = v.trim();
@@ -127,7 +197,10 @@ function ActionCard({ subsystem, action }: { subsystem: string; action: Action }
               <Field.Control
                 className="field-input"
                 placeholder={p.placeholder}
-                {...register(p.name, p.required ? { required: `${p.name} is required` } : {})}
+                {...register(
+                  p.name,
+                  p.required ? { required: `${p.name} is required` } : {},
+                )}
               />
               {errors[p.name] && (
                 <Field.Error className="field-error" match>

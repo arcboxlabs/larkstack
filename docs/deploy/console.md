@@ -16,8 +16,17 @@ One process, one deploy. The admin API is self-documented — OpenAPI spec at
 
 ## Authentication
 
-Sign-in is **Lark OAuth**. Bind a `[lark-apps.<name>]` as the console's OAuth
-client under `[console]`:
+Sign-in is **Lark OAuth**. Until a Lark app is bound the console is **open** (so
+you can reach the UI to set it up); a warning is logged and a banner is shown.
+
+**From the UI (recommended).** First boot lands on a guided **Setup** screen:
+register a Lark app (credentials are live-tested), then bind it as the console's
+sign-in client and set the admin allowlist — no TOML editing. The screen shows
+the exact redirect URI to register in the Lark app's security settings (grant it
+the user-info permission). Saving enforces sign-in immediately and hands you to
+the login flow.
+
+**Or in `config.toml`,** the equivalent binding under `[console]`:
 
 ```toml
 [console]
@@ -26,9 +35,10 @@ admins = ["you@example.com"]    # email allowlist; empty = any tenant user
 # redirect_uri = "https://console.example.com/auth/callback"  # else auto-derived
 ```
 
-Until `lark_app` is bound the console is **open** (so you can reach the UI to set
-it up); a warning is logged. Register `<console-url>/auth/callback` as a redirect
-URI in the Lark app's security settings, and grant it the user-info permission.
+Register `<console-url>/auth/callback` as a redirect URI in the Lark app's
+security settings, and grant it the user-info permission. If you ever lock
+yourself out (admins list omits your account), clear `[console].lark_app` in
+`config.toml` on the server to reopen the console.
 
 Each subsystem's own env vars (`LINEAR_*`, `LARK_*`, `STT_*`, `DIGEST_*`,
 `STANDUP_*`, `PORT`, `DEBOUNCE_DELAY_MS`) are read by its config loader as

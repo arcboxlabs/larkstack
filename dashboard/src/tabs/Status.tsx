@@ -1,5 +1,7 @@
-import useSWR from "swr";
-import { errMessage } from "../lib/http";
+import { Switch } from "@base-ui/react/switch";
+import { useState } from "react";
+import useSWR, { mutate } from "swr";
+import { errMessage, mutateRequest } from "../lib/http";
 
 type State = "starting" | "running" | "errored" | "stopped";
 
@@ -11,6 +13,17 @@ interface Subsystem {
 
 interface StatusResponse {
   subsystems: Record<string, Subsystem>;
+}
+
+interface AppManifest {
+  name: string;
+  kind: "integration" | "automation";
+  description: string;
+  enabled: boolean;
+}
+
+interface AppsResponse {
+  apps: AppManifest[];
 }
 
 const STATE_COLORS: Record<State, string> = {
@@ -29,38 +42,77 @@ function freshness(ms: number): string {
 }
 
 export function Status() {
-  const { data, error, isLoading } = useSWR<StatusResponse>("/api/status", {
+  const { data: status, error } = useSWR<StatusResponse>("/api/status", {
     refreshInterval: 3000,
   });
+  const { data: appsData } = useSWR<AppsResponse>("/api/apps");
+  const subsystems = status?.subsystems ?? {};
+  const apps = appsData?.apps;
+
+  const [pending, setPending] = useState<string | null>(null);
+  const [toggleError, setToggleError] = useState<string | null>(null);
+
+  const onToggle = async (name: string, enabled: boolean) => {
+    setPending(name);
+    setToggleError(null);
+    try {
+      await mutateRequest(`/api/config/${encodeURIComponent(name)}/enabled`, {
+        method: "PUT",
+        json: { enabled },
+      });
+      await Promise.all([mutate("/api/apps"), mutate("/api/status")]);
+    } catch (e) {
+      setToggleError(`${name}: ${errMessage(e)}`);
+    } finally {
+      setPending(null);
+    }
+  };
 
   return (
     <section>
       <h2>Subsystems</h2>
       {error && <p className="error">Failed to load: {errMessage(error)}</p>}
-      {isLoading && <p>Loading…</p>}
-      {data && (
+      {toggleError && <p className="error">{toggleError}</p>}
+      {!apps && <p>Loading…</p>}
+      {apps && apps.length === 0 && <p className="muted">no apps registered</p>}
+      {apps && apps.length > 0 && (
         <div className="status-grid">
-          {Object.entries(data.subsystems).length === 0 && (
-            <p className="muted">no subsystems reporting yet</p>
-          )}
-          {Object.entries(data.subsystems).map(([name, s]) => (
-            <article key={name} className={`status-card ${s.state}`}>
-              <header>
-                <span className="status-name">{name}</span>
-                <span
-                  className="status-pill"
-                  style={{
-                    color: STATE_COLORS[s.state],
-                    borderColor: STATE_COLORS[s.state],
-                  }}
-                >
-                  {s.state}
-                </span>
-              </header>
-              {s.message && <p className="status-msg">{s.message}</p>}
-              <footer className="muted">updated {freshness(s.updated_at)}</footer>
-            </article>
-          ))}
+          {apps.map((app) => {
+            const s = subsystems[app.name];
+            const state: State =
+              s?.state ?? (app.enabled ? "starting" : "stopped");
+            return (
+              <article key={app.name} className={`status-card ${state}`}>
+                <header>
+                  <span className="status-name">{app.name}</span>
+                  <div className="status-controls">
+                    <span
+                      className="status-pill"
+                      style={{
+                        color: STATE_COLORS[state],
+                        borderColor: STATE_COLORS[state],
+                      }}
+                    >
+                      {state}
+                    </span>
+                    <Switch.Root
+                      className="switch"
+                      checked={app.enabled}
+                      disabled={pending === app.name}
+                      onCheckedChange={(checked) => onToggle(app.name, checked)}
+                      aria-label={`${app.enabled ? "disable" : "enable"} ${app.name}`}
+                    >
+                      <Switch.Thumb className="switch-thumb" />
+                    </Switch.Root>
+                  </div>
+                </header>
+                {s?.message && <p className="status-msg">{s.message}</p>}
+                <footer className="muted">
+                  {s ? `updated ${freshness(s.updated_at)}` : "not started"}
+                </footer>
+              </article>
+            );
+          })}
         </div>
       )}
     </section>

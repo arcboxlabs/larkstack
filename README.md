@@ -28,11 +28,14 @@ Apps are pluggable units the console supervises and toggles. **Integrations** br
 
 | App | Kind | What it does |
 | :--- | :--- | :--- |
-| [`linear`](./apps/integrations/linear) | Integration | Linear webhook → Lark notification cards + issue link previews |
-| [`github`](./apps/integrations/github) | Integration | GitHub webhook → PR/issue/CI/security-alert cards + review-request DMs |
-| [`x`](./apps/integrations/x) | Integration | X (Twitter) link previews rendered as Lark cards (preview-only) |
-| [`minutes`](./apps/automations/minutes) | Automation | Auto-transcribe Lark VC recordings (STT) → digest cards + optional Lark Doc |
-| [`standup`](./apps/automations/standup) | Automation | Daily standup reminders + on-demand commands (announce/remind/urgent/check) |
+| [`Linear`](./apps/integrations/linear) | ![Integration][kind-integration] | Linear webhook → Lark notification cards + issue link previews |
+| [`GitHub`](./apps/integrations/github) | ![Integration][kind-integration] | GitHub webhook → PR/issue/CI/security-alert cards + review-request DMs |
+| [`X`](./apps/integrations/x) | ![Integration][kind-integration] | X (Twitter) link previews rendered as Lark cards (preview-only) |
+| [`Minutes`](./apps/automations/minutes) | ![Automation][kind-automation] | Auto-transcribe Lark VC recordings (STT) → digest cards + optional Lark Doc |
+| [`Standup`](./apps/automations/standup) | ![Automation][kind-automation] | Daily standup reminders + on-demand commands (announce/remind/urgent/check) |
+
+[kind-integration]: https://img.shields.io/badge/Integration-2563eb?style=flat-square
+[kind-automation]: https://img.shields.io/badge/Automation-16a34a?style=flat-square
 
 The three integrations each run their own inbound HTTP server on a distinct port (linear `:3000`, github `:3001`, x `:3002`).
 
