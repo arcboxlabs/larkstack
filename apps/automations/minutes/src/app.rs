@@ -20,7 +20,7 @@ struct MeetingDigestApp;
 impl App for MeetingDigestApp {
     fn manifest(&self) -> Manifest {
         Manifest {
-            name: "meeting-digest".into(),
+            name: "minutes".into(),
             kind: Kind::Automation,
             description: "Auto-transcribe Lark/Feishu recorded meetings and post digest cards"
                 .into(),

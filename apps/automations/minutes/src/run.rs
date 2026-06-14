@@ -33,7 +33,7 @@ pub fn build_pipeline(cfg: &AppConfig) -> anyhow::Result<Arc<Pipeline>> {
     info!(
         provider = ?cfg.stt.provider,
         model = %provider_model(cfg),
-        "meeting-digest: stt backend ready ({})",
+        "minutes: stt backend ready ({})",
         stt_backend.name()
     );
     Ok(Arc::new(Pipeline {
@@ -57,7 +57,7 @@ pub async fn serve_ws(
     let http_ws = reqwest::Client::new();
     info!(
         concurrency = DEFAULT_CONCURRENCY,
-        "meeting-digest: starting WS long connection"
+        "minutes: starting WS long connection"
     );
     tokio::select! {
         _ = ws::run_ws_client(
@@ -67,7 +67,7 @@ pub async fn serve_ws(
             handler,
             http_ws,
         ) => {}
-        _ = cancel.cancelled() => info!("meeting-digest: WS shutting down"),
+        _ = cancel.cancelled() => info!("minutes: WS shutting down"),
     }
     Ok(())
 }

@@ -21,7 +21,7 @@ impl App for StandupApp {
     fn manifest(&self) -> Manifest {
         let date = json!({ "date": "today | tomorrow | YYYY-MM-DD" });
         Manifest {
-            name: "standup-bot".into(),
+            name: "standup".into(),
             kind: Kind::Automation,
             description: "Daily standup reminder bot".into(),
             actions: vec![

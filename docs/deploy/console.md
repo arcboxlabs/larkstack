@@ -1,7 +1,7 @@
 # Deploy `larkstack-console`
 
 The console is a single binary that supervises the bundled apps (`linear`,
-`github`, `x`, `meeting-digest`, `standup-bot`) and serves a React admin UI.
+`github`, `x`, `minutes`, `standup`) and serves a React admin UI.
 One process, one deploy. The admin API is self-documented — OpenAPI spec at
 `/api/openapi.json`, a Scalar explorer at `/api/docs`.
 

@@ -18,8 +18,8 @@ Apps (`apps/`):
 - **apps/integrations/linear** (Integration) — Linear webhook → Lark notifications + issue link previews. `POST /webhook` (debounced issue/comment cards), `POST /lark/event` (preview).
 - **apps/integrations/github** (Integration) — GitHub webhook → Lark notifications. `POST /github/webhook`; octocrab native models; PR/issue/CI/security-alert cards + review-request DMs.
 - **apps/integrations/x** (Integration) — X (Twitter) link previews. `POST /lark/event`; fetches tweet data (`XClient`) and replies with a preview card. Preview-only — no notifications.
-- **apps/automations/meeting-digest** (Automation) — Auto-transcribe Lark/Feishu recorded meetings and post digest cards. STT via `whisper-api` or `whisper-cpp` (feature flag). Uses `larkoapi` for all Lark API surface.
-- **apps/automations/standup-bot** (Automation) — Daily standup reminder bot. Scheduler + on-demand actions. Uses `larkoapi` over a WebSocket long connection.
+- **apps/automations/minutes** (Automation) — Auto-transcribe Lark/Feishu recorded meetings and post digest cards. STT via `whisper-api` or `whisper-cpp` (feature flag). Uses `larkoapi` for all Lark API surface.
+- **apps/automations/standup** (Automation) — Daily standup reminder bot. Scheduler + on-demand actions. Uses `larkoapi` over a WebSocket long connection.
 
 The three integrations each own their source + cards and share `lark-kit`; there is **no** cross-app `Event` enum. Each runs its own inbound HTTP server, so the console config gives them distinct ports (`[linear.server] 3000`, `[github.server] 3001`, `[x.server] 3002`).
 
@@ -66,8 +66,8 @@ cargo build -p console --release                            # umbrella binary ->
 cargo build -p linear --release                             # standalone app bins
 cargo build -p github --release
 cargo build -p x --release
-cargo build -p meeting-digest --release
-cargo build -p standup-bot --release
+cargo build -p minutes --release
+cargo build -p standup --release
 
 # Frontend (required before `cargo build -p console` for a non-stub UI)
 cd dashboard && pnpm install && pnpm build
@@ -100,7 +100,7 @@ Container: workspace-root `Dockerfile` (node → rust → debian:slim); `docker-
 
 ## crates/console
 
-Thin binary: `Larkstack::new().register(linear::app()).register(github::app()).register(x::app()).register(meeting_digest::app()).register(standup_bot::app()).run().await`. Adding an app = one `.register(...)` + a crate dep.
+Thin binary: `Larkstack::new().register(linear::app()).register(github::app()).register(x::app()).register(minutes::app()).register(standup::app()).run().await`. Adding an app = one `.register(...)` + a crate dep.
 
 ## apps/integrations/{linear, github, x} + crates/lark-kit
 
@@ -114,7 +114,7 @@ Each integration is its own App crate (own source + cards + `AppState` + `[[bin]
 
 Each runs its own axum server on its `[<app>.server].port` (defaults: linear 3000, github 3001, x 3002).
 
-## apps/automations/meeting-digest
+## apps/automations/minutes
 
 Pipeline: VC `meeting_ended` / `recording_ready` event → fetch recording → STT → summarize → interactive card + optional Lark Doc attachment. Action: `process-meeting` (params: `meeting_id`, optional `owner`/`url`).
 
@@ -125,9 +125,9 @@ Key modules:
 - `lark/{card,docs}.rs` — Digest card builder + Lark Docs attachment
 - `app.rs` — `App`/`Instance` impl; `run::serve_ws(cancel)`, `actions::handle(...)`
 
-Config via `figment` + env vars; see `apps/automations/meeting-digest/README.md`.
+Config via `figment` + env vars; see `apps/automations/minutes/README.md`.
 
-## apps/automations/standup-bot
+## apps/automations/standup
 
 Daily standup runner: WebSocket command bot + scheduler (Asia/Shanghai). Actions: `announce | ensure | remind | urgent | urgent-user | check` (accept optional `today | tomorrow | YYYY-MM-DD`; `urgent-user` also needs `open_id`).
 
@@ -138,7 +138,7 @@ Modules:
 - `templates.rs` — `askama` template rendering for chat replies
 - `app.rs` — `App`/`Instance` impl; `run::serve_with_bot(cancel)`, `actions::handle(...)`
 
-Required env: `LARK_APP_ID`, `LARK_APP_SECRET`, `STANDUP_CHAT_ID`, `STANDUP_FOLDER_TOKEN`, `STANDUP_ENABLED=true` (scheduler). Optional: `LARK_BASE_URL` (default `https://open.larksuite.com`). Note the `[standup-bot].enabled` host toggle is distinct from `[standup-bot.standup].enabled` (scheduler auto-fire).
+Required env: `LARK_APP_ID`, `LARK_APP_SECRET`, `STANDUP_CHAT_ID`, `STANDUP_FOLDER_TOKEN`, `STANDUP_ENABLED=true` (scheduler). Optional: `LARK_BASE_URL` (default `https://open.larksuite.com`). Note the `[standup].enabled` host toggle is distinct from `[standup.standup].enabled` (scheduler auto-fire).
 
 The repo-relative `.cargo/config.toml` carries a hard-coded musl cross-compile linker path for the original author's machine; adjust for your toolchain.
 

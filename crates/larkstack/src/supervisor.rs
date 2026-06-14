@@ -219,38 +219,38 @@ app_secret = "s"
 app_id = "b"
 app_secret = "t"
 
-[standup-bot]
+[standup]
 enabled = true
 lark_app = "main"
 "#;
 
     #[test]
     fn enabled_reflects_section_flag() {
-        assert!(ChangeKey::compute(CFG, "standup-bot").enabled());
+        assert!(ChangeKey::compute(CFG, "standup").enabled());
         // A section that is absent (or has no `enabled`) is disabled.
-        assert!(!ChangeKey::compute(CFG, "meeting-digest").enabled());
+        assert!(!ChangeKey::compute(CFG, "minutes").enabled());
     }
 
     #[test]
     fn editing_the_referenced_lark_app_flips_the_key() {
-        let base = ChangeKey::compute(CFG, "standup-bot");
+        let base = ChangeKey::compute(CFG, "standup");
         let edited = CFG.replace(r#"app_secret = "s""#, r#"app_secret = "rotated""#);
-        assert_ne!(ChangeKey::compute(&edited, "standup-bot"), base);
+        assert_ne!(ChangeKey::compute(&edited, "standup"), base);
     }
 
     #[test]
     fn editing_an_unreferenced_lark_app_leaves_the_key() {
-        // standup-bot binds to `main`, not `other` — touching `other` must not
+        // standup binds to `main`, not `other` — touching `other` must not
         // bounce it.
-        let base = ChangeKey::compute(CFG, "standup-bot");
+        let base = ChangeKey::compute(CFG, "standup");
         let edited = CFG.replace(r#"app_secret = "t""#, r#"app_secret = "rotated""#);
-        assert_eq!(ChangeKey::compute(&edited, "standup-bot"), base);
+        assert_eq!(ChangeKey::compute(&edited, "standup"), base);
     }
 
     #[test]
     fn editing_own_section_flips_the_key() {
-        let base = ChangeKey::compute(CFG, "standup-bot");
+        let base = ChangeKey::compute(CFG, "standup");
         let edited = CFG.replace("lark_app = \"main\"", "lark_app = \"other\"");
-        assert_ne!(ChangeKey::compute(&edited, "standup-bot"), base);
+        assert_ne!(ChangeKey::compute(&edited, "standup"), base);
     }
 }

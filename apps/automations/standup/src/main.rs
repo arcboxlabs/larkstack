@@ -7,7 +7,7 @@ use larkoapi::LarkBotClient;
 use larkstack_core::ControlPlane;
 use tracing::error;
 
-use standup_bot::{AppConfig, flow};
+use standup::{AppConfig, flow};
 
 #[tokio::main]
 async fn main() -> ExitCode {
@@ -35,11 +35,11 @@ async fn main() -> ExitCode {
     match cmd {
         "run" => {
             let plane = ControlPlane::new();
-            let handle = plane.handle("standup-bot");
-            match standup_bot::run(cfg, handle).await {
+            let handle = plane.handle("standup");
+            match standup::run(cfg, handle).await {
                 Ok(_) => ExitCode::SUCCESS,
                 Err(e) => {
-                    error!("standup-bot: {e:#}");
+                    error!("standup: {e:#}");
                     ExitCode::FAILURE
                 }
             }
@@ -68,7 +68,7 @@ async fn main() -> ExitCode {
         }
         "urgent-user" => {
             let Some(uid) = args.get(1) else {
-                eprintln!("usage: standup-bot urgent-user <open_id> [date]");
+                eprintln!("usage: standup urgent-user <open_id> [date]");
                 return ExitCode::from(2);
             };
             let bot = build_bot(&cfg);
@@ -118,20 +118,20 @@ fn resolve_date(arg: Option<&str>, default: NaiveDate) -> NaiveDate {
 }
 
 fn print_help() {
-    eprintln!("standup-bot — Daily Standup reminder for Lark/Feishu");
+    eprintln!("standup — Daily Standup reminder for Lark/Feishu");
     eprintln!();
     eprintln!("Usage:");
-    eprintln!("  standup-bot                      run scheduler (default)");
-    eprintln!("  standup-bot run                  same as above");
+    eprintln!("  standup                      run scheduler (default)");
+    eprintln!("  standup run                  same as above");
     eprintln!();
     eprintln!("Manual triggers (one-shot, exit after):");
-    eprintln!("  standup-bot ensure   [date]      create doc + share with chat (no chat card)");
-    eprintln!("  standup-bot announce [date]      ensure doc + post announcement card to chat");
-    eprintln!("  standup-bot remind   [date]      DM everyone still empty");
-    eprintln!("  standup-bot urgent   [date]      DM + in-app urgent escalation");
-    eprintln!("  standup-bot urgent-user <open_id> [date]");
+    eprintln!("  standup ensure   [date]      create doc + share with chat (no chat card)");
+    eprintln!("  standup announce [date]      ensure doc + post announcement card to chat");
+    eprintln!("  standup remind   [date]      DM everyone still empty");
+    eprintln!("  standup urgent   [date]      DM + in-app urgent escalation");
+    eprintln!("  standup urgent-user <open_id> [date]");
     eprintln!("                                   urgent one specific user (for testing)");
-    eprintln!("  standup-bot check    [date]      list missing fillers (read-only)");
+    eprintln!("  standup check    [date]      list missing fillers (read-only)");
     eprintln!();
     eprintln!("date:  today | tomorrow | YYYY-MM-DD");
     eprintln!("       default is `tomorrow` for ensure/announce, `today` for the rest");

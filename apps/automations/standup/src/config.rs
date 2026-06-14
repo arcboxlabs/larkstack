@@ -68,14 +68,14 @@ impl AppConfig {
         })
     }
 
-    /// Build from a full config TOML containing a `[standup-bot]` section.
+    /// Build from a full config TOML containing a `[standup]` section.
     /// The env loader runs first; TOML overlays per field.
     pub fn from_toml(full_toml: &str) -> Result<Self, Box<figment::Error>> {
         #[derive(Default, Deserialize)]
         struct TopLevel {
             #[serde(rename = "lark-apps", default)]
             lark_apps: LarkRegistry,
-            #[serde(rename = "standup-bot", default)]
+            #[serde(rename = "standup", default)]
             section: Section,
         }
         #[derive(Default, Deserialize)]

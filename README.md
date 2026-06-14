@@ -30,15 +30,15 @@
 | `apps/integrations/linear` | Linear webhook → Lark notifications + issue link previews (Integration) |
 | `apps/integrations/github` | GitHub webhook → Lark notifications (Integration) |
 | `apps/integrations/x` | X (Twitter) link previews in Lark (Integration) |
-| `apps/automations/meeting-digest` | Auto-transcribe Lark VC recordings, post digest cards (Automation) |
-| `apps/automations/standup-bot` | Daily standup reminders + on-demand actions (Automation) |
+| `apps/automations/minutes` | Auto-transcribe Lark VC recordings, post digest cards (Automation) |
+| `apps/automations/standup` | Daily standup reminders + on-demand actions (Automation) |
 
 ## Console features
 
 - **Dashboard** — per-app state + last-error.
 - **Live event stream** — every `tracing` event from every subsystem, SSE with `?since=` / `Last-Event-ID` backfill, persisted to SQLite (rolling 10k).
 - **Config editor** — TOML editor in the UI; each app has an `enabled` toggle, and saving hot-restarts only the affected app.
-- **Actions** — one-shot triggers per subsystem (`linear`/`github`: ping/test-lark, `x`: ping, `standup-bot: announce/ensure/remind/urgent/check`, `meeting-digest: process-meeting`).
+- **Actions** — one-shot triggers per subsystem (`linear`/`github`: ping/test-lark, `x`: ping, `standup: announce/ensure/remind/urgent/check`, `minutes: process-meeting`).
 - **Auth** — sign in with **Lark OAuth**; `/api/*` needs a session. The console
   is open until you bind a Lark app under `[console]`, then restricted to the
   `admins` allowlist.
@@ -73,7 +73,7 @@ See [docs/deploy/console.md](./docs/deploy/console.md) for the full env-var refe
 Each app keeps its own `[[bin]]` for local use or a single-purpose deploy, reading config from env vars (`LINEAR_*`, `LARK_*`, `GITHUB_*`, …):
 
 ```bash
-cargo run -p linear      # or github / x / meeting-digest / standup-bot
+cargo run -p linear      # or github / x / minutes / standup
 ```
 
 For production, deploy the **console** — one binary, all apps, toggled from the UI. See [docs/deploy/console.md](./docs/deploy/console.md) and [docs/deploy/railway.md](./docs/deploy/railway.md).

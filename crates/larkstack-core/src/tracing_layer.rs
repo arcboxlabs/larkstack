@@ -12,7 +12,7 @@ use crate::{ControlPlane, Event};
 ///
 /// Subsystem is derived from the event's `target` (the module path Cargo
 /// generates from the crate name) by taking the first segment and replacing
-/// underscores with dashes — `meeting_digest::pipeline` -> `meeting-digest`.
+/// underscores with dashes — `larkstack_core::supervisor` -> `larkstack-core`.
 /// Targets without a crate prefix get `None`.
 pub struct ControlLayer {
     plane: ControlPlane,

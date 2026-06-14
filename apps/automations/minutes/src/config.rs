@@ -157,7 +157,7 @@ impl AppConfig {
         })
     }
 
-    /// Build from a full config TOML containing a `[meeting-digest]` section.
+    /// Build from a full config TOML containing a `[minutes]` section.
     /// Any field omitted from the TOML falls back to its env-var equivalent;
     /// the env loader runs first and the TOML section overlays on top.
     pub fn from_toml(full_toml: &str) -> Result<Self, Box<figment::Error>> {
@@ -165,7 +165,7 @@ impl AppConfig {
         struct TopLevel {
             #[serde(rename = "lark-apps", default)]
             lark_apps: LarkRegistry,
-            #[serde(rename = "meeting-digest", default)]
+            #[serde(rename = "minutes", default)]
             section: Section,
         }
         #[derive(Default, Deserialize)]

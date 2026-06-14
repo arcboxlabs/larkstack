@@ -1,4 +1,4 @@
-# meeting-digest
+# minutes
 
 > English · [中文](./README_CN.md)
 
@@ -65,7 +65,7 @@ Optional:
 |---|---|---|
 | `LARK_BASE_URL` | `https://open.larksuite.com` | use `https://open.feishu.cn` for China |
 | `DIGEST_FALLBACK_CHAT_ID` | — | also post the card to this chat |
-| `DIGEST_WORK_DIR` | `$TMPDIR/meeting-digest` | scratch dir for downloads + audio |
+| `DIGEST_WORK_DIR` | `$TMPDIR/minutes` | scratch dir for downloads + audio |
 | `DIGEST_FFMPEG` | `ffmpeg` | binary path |
 | `STT_LANGUAGE` | `auto` | BCP-47 (`zh`, `en`, …) — speeds up + improves STT |
 | `STT_WHISPER_API_BASE` | `https://api.openai.com/v1` | OpenAI-compatible host |
@@ -75,7 +75,7 @@ Optional:
 ## CLI
 
 ```
-meeting-digest [COMMAND]
+minutes [COMMAND]
 
 Commands:
   run                                 default — listen on Lark WS, digest on recording_ready_v1
@@ -88,13 +88,13 @@ Examples:
 
 ```bash
 # Production: listen forever, concurrency 2.
-meeting-digest run
+minutes run
 
 # Process one meeting, override DM recipient.
-meeting-digest process abc123 --owner ou_xxxxxxxx
+minutes process abc123 --owner ou_xxxxxxxx
 
 # Skip VC lookup (useful when you already have a recording URL).
-meeting-digest process abc123 --url https://.../recording.mp4
+minutes process abc123 --url https://.../recording.mp4
 ```
 
 ## Lark app setup

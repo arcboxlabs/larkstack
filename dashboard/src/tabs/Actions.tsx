@@ -24,7 +24,7 @@ const CATALOG: Record<string, Action[]> = {
     { name: "test-lark", description: "Post a test message to the configured Lark webhook" },
   ],
   x: [{ name: "ping", description: "Emit a pong log event (smoke test the action plumbing)" }],
-  "standup-bot": [
+  "standup": [
     { name: "announce", description: "Ensure tomorrow's doc and post the announcement card",
       params: [{ name: "date", label: "date (today | tomorrow | YYYY-MM-DD)", placeholder: "tomorrow" }] },
     { name: "ensure", description: "Create tomorrow's doc + share with chat (no card)",
@@ -41,7 +41,7 @@ const CATALOG: Record<string, Action[]> = {
         { name: "date", label: "date", placeholder: "today" },
       ] },
   ],
-  "meeting-digest": [
+  "minutes": [
     { name: "process-meeting", description: "Backfill / re-process one meeting by ID",
       params: [
         { name: "meeting_id", label: "meeting_id", required: true, placeholder: "VC meeting ID" },

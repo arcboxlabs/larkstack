@@ -6,9 +6,9 @@ use larkoapi::LarkBotClient;
 use larkstack_core::ControlPlane;
 use tracing::error;
 
-use meeting_digest::AppConfig;
-use meeting_digest::pipeline::Pipeline;
-use meeting_digest::stt;
+use minutes::AppConfig;
+use minutes::pipeline::Pipeline;
+use minutes::stt;
 
 /// Auto-transcribe Lark recorded meetings and post digest cards.
 ///
@@ -16,7 +16,7 @@ use meeting_digest::stt;
 /// STT defaults to whisper_api (needs STT_WHISPER_API_KEY); use
 /// STT_PROVIDER=whisper_cpp with STT_WHISPER_CPP_MODEL for local.
 #[derive(Debug, Parser)]
-#[command(name = "meeting-digest", version, about, long_about = None)]
+#[command(name = "minutes", version, about, long_about = None)]
 struct Cli {
     #[command(subcommand)]
     command: Option<Command>,
@@ -56,11 +56,11 @@ async fn main() -> ExitCode {
     match cli.command.unwrap_or(Command::Run) {
         Command::Run => {
             let plane = ControlPlane::new();
-            let handle = plane.handle("meeting-digest");
-            match meeting_digest::run(cfg, handle).await {
+            let handle = plane.handle("minutes");
+            match minutes::run(cfg, handle).await {
                 Ok(_) => ExitCode::SUCCESS,
                 Err(e) => {
-                    error!("meeting-digest: {e:#}");
+                    error!("minutes: {e:#}");
                     ExitCode::FAILURE
                 }
             }

@@ -17,5 +17,5 @@ larkstack = { path = "../larkstack" }
 linear = { path = "../../apps/integrations/linear" }
 github = { path = "../../apps/integrations/github" }
 x = { path = "../../apps/integrations/x" }
-meeting-digest = { path = "../../apps/automations/meeting-digest" }
-standup-bot = { path = "../../apps/automations/standup-bot" }
+minutes = { path = "../../apps/automations/minutes" }
+standup = { path = "../../apps/automations/standup" }

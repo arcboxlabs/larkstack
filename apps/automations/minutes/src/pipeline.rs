@@ -172,7 +172,7 @@ impl Pipeline {
     fn work_dir(&self) -> PathBuf {
         match &self.digest_cfg.work_dir {
             Some(d) => PathBuf::from(d),
-            None => std::env::temp_dir().join("meeting-digest"),
+            None => std::env::temp_dir().join("minutes"),
         }
     }
 }

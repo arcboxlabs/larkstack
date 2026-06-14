@@ -1,12 +1,12 @@
 [package]
-name = "standup-bot"
+name = "standup"
 version = "0.1.0"
 edition = "2024"
 description = "Daily Standup reminder bot for Lark/Feishu"
 license = "MIT"
 
 [[bin]]
-name = "standup-bot"
+name = "standup"
 path = "src/main.rs"
 
 [dependencies]

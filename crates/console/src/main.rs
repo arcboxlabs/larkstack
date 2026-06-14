@@ -8,8 +8,8 @@ async fn main() -> anyhow::Result<()> {
         .register(linear::app())
         .register(github::app())
         .register(x::app())
-        .register(meeting_digest::app())
-        .register(standup_bot::app())
+        .register(minutes::app())
+        .register(standup::app())
         .run()
         .await
 }

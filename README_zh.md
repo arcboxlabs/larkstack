@@ -28,15 +28,15 @@
 | `apps/integrations/linear` | Linear webhook → 飞书通知 + issue 链接预览（Integration） |
 | `apps/integrations/github` | GitHub webhook → 飞书通知（Integration） |
 | `apps/integrations/x` | 飞书内的 X（Twitter）链接预览（Integration） |
-| `apps/automations/meeting-digest` | 自动转写飞书 VC 录制并发送摘要卡片（Automation） |
-| `apps/automations/standup-bot` | 每日站会提醒 + 一次性动作（Automation） |
+| `apps/automations/minutes` | 自动转写飞书 VC 录制并发送摘要卡片（Automation） |
+| `apps/automations/standup` | 每日站会提醒 + 一次性动作（Automation） |
 
 ## 控制台特性
 
 - **状态面板**——每个 app 的运行状态 + 最近错误
 - **实时事件流**——所有子系统的 `tracing` 事件，SSE 支持 `?since=` / `Last-Event-ID` 回放，持久化到 SQLite（滚动 1 万条）
 - **配置编辑**——UI 内 TOML 编辑器，每个 app 有 `enabled` 开关，保存只热重启受影响的 app
-- **动作触发**——每个子系统的一次性命令（`linear`/`github`: ping/test-lark、`x`: ping、`standup-bot: announce/ensure/remind/urgent/check`、`meeting-digest: process-meeting`）
+- **动作触发**——每个子系统的一次性命令（`linear`/`github`: ping/test-lark、`x`: ping、`standup: announce/ensure/remind/urgent/check`、`minutes: process-meeting`）
 - **认证**——通过 **Lark OAuth** 登录，`/api/*` 需要会话。在 `[console]` 绑定 Lark app 前控制台开放，绑定后按 `admins` 白名单限制
 
 ## 快速开始
@@ -68,7 +68,7 @@ docker compose up -d
 每个 app 仍保留独立 `[[bin]]`，可用于本地或单一用途部署（从环境变量读取 `LINEAR_*`、`LARK_*`、`GITHUB_*` …）：
 
 ```bash
-cargo run -p linear      # 或 github / x / meeting-digest / standup-bot
+cargo run -p linear      # 或 github / x / minutes / standup
 ```
 
 生产环境请部署**控制台**——一个二进制、所有 app、从 UI 切换开关。见 [docs/deploy/console.md](./docs/deploy/console.md) 与 [docs/deploy/railway.md](./docs/deploy/railway.md)。

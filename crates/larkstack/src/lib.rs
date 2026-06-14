@@ -88,14 +88,14 @@ enabled = false
 [x.server]
 port = 3002
 
-[meeting-digest]
+[minutes]
 enabled = false
 # lark_app = "main"
-[meeting-digest.lark]
+[minutes.lark]
 # app_id = ""
 # app_secret = ""
 # base_url = "https://open.larksuite.com"
-[meeting-digest.stt]
+[minutes.stt]
 # provider = "whisper_api"  # or "whisper_cpp"
 # language = "auto"
 # whisper_api_base = "https://api.openai.com/v1"
@@ -103,21 +103,21 @@ enabled = false
 # whisper_api_key = ""
 # whisper_cpp_model = ""
 # whisper_cpp_threads = 0
-[meeting-digest.digest]
+[minutes.digest]
 # folder_token = ""
 # fallback_chat_id = ""
 # work_dir = ""
 # ffmpeg = "ffmpeg"
 
-[standup-bot]
+[standup]
 enabled = false
 # lark_app = "main"
-[standup-bot.lark]
+[standup.lark]
 # app_id = ""
 # app_secret = ""
 # base_url = "https://open.larksuite.com"
-[standup-bot.standup]
-# enabled = false   # scheduler auto-fire — distinct from [standup-bot] above
+[standup.standup]
+# enabled = false   # scheduler auto-fire — distinct from [standup] above
 # chat_id = ""
 # folder_token = ""
 "#;

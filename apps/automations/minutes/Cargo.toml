@@ -1,12 +1,12 @@
 [package]
-name = "meeting-digest"
+name = "minutes"
 version = "0.1.0"
 edition = "2024"
 description = "Auto-transcribe Lark/Feishu recorded meetings and post digest cards"
 license = "MIT"
 
 [[bin]]
-name = "meeting-digest"
+name = "minutes"
 path = "src/main.rs"
 
 [features]

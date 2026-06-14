@@ -1,4 +1,4 @@
-# meeting-digest
+# minutes
 
 > [English](./README.md) · 中文
 
@@ -62,7 +62,7 @@ cargo build --release --features whisper-cpp
 |---|---|---|
 | `LARK_BASE_URL` | `https://open.larksuite.com` | 飞书国内版用 `https://open.feishu.cn` |
 | `DIGEST_FALLBACK_CHAT_ID` | — | 同时将卡片发送到此群 |
-| `DIGEST_WORK_DIR` | `$TMPDIR/meeting-digest` | 临时文件(下载/音频)目录 |
+| `DIGEST_WORK_DIR` | `$TMPDIR/minutes` | 临时文件(下载/音频)目录 |
 | `DIGEST_FFMPEG` | `ffmpeg` | ffmpeg 可执行路径 |
 | `STT_LANGUAGE` | `auto` | BCP-47 语言提示(`zh`、`en`…),加速并提升准确度 |
 | `STT_WHISPER_API_BASE` | `https://api.openai.com/v1` | OpenAI 兼容端点 |
@@ -72,7 +72,7 @@ cargo build --release --features whisper-cpp
 ## 命令行
 
 ```
-meeting-digest [COMMAND]
+minutes [COMMAND]
 
 Commands:
   run                                 默认 — 监听 Lark WS,recording_ready_v1 触发处理
@@ -85,13 +85,13 @@ Commands:
 
 ```bash
 # 生产:持续监听,并发 2。
-meeting-digest run
+minutes run
 
 # 手动处理一场会议,指定私信对象。
-meeting-digest process abc123 --owner ou_xxxxxxxx
+minutes process abc123 --owner ou_xxxxxxxx
 
 # 跳过 VC 查询,直接用已知 URL。
-meeting-digest process abc123 --url https://.../recording.mp4
+minutes process abc123 --url https://.../recording.mp4
 ```
 
 ## 飞书应用配置

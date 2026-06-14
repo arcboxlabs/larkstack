@@ -20,8 +20,8 @@ apps/
     github/         # GitHub webhook → notifications
     x/              # X (Twitter) link previews
   automations/
-    meeting-digest/ # Lark VC recordings → transcribe → digest cards
-    standup-bot/    # daily standup scheduler + command bot
+    minutes/ # Lark VC recordings → transcribe → digest cards
+    standup/    # daily standup scheduler + command bot
 ```
 
 ## Integrations + lark-kit

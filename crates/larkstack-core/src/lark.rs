@@ -12,7 +12,7 @@
 //! app_secret = "..."
 //! base_url = "https://open.larksuite.com"   # optional
 //!
-//! [standup-bot]
+//! [standup]
 //! lark_app = "main"   # resolves to the credentials above
 //! ```
 //!

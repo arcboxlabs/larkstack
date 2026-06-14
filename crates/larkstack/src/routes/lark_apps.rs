@@ -320,7 +320,7 @@ mod tests {
 
     #[test]
     fn upsert_writes_nested_header_and_keeps_comments() {
-        let mut d = doc("# keep me\n[standup-bot]\nenabled = true\n");
+        let mut d = doc("# keep me\n[standup]\nenabled = true\n");
         upsert_entry(&mut d, "main", "cli_x", "sec", "https://open.larksuite.com");
         let out = d.to_string();
         assert!(out.contains("# keep me"), "comment preserved: {out}");
