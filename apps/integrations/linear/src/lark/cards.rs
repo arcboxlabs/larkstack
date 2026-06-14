@@ -5,7 +5,7 @@ use lark_kit::truncate;
 use serde_json::{Value, json};
 
 use crate::domain::{IssueNotification, Priority};
-use crate::source::api::LinearIssueData;
+use crate::source::api::{DueIssue, LinearIssueData};
 
 fn priority_color(priority: &Priority) -> &'static str {
     match priority {
@@ -110,6 +110,91 @@ pub fn assign_dm(n: &IssueNotification) -> LarkCard {
             view_button(&n.url),
         ],
     )
+}
+
+/// DM reminding the assignee (or a subscriber) about an approaching/overdue
+/// deadline. Color and wording escalate as the due date nears and passes.
+pub fn reminder_dm(issue: &DueIssue, days_until: i64) -> LarkCard {
+    let priority = Priority::from_linear(issue.priority);
+    let (color, when) = if days_until > 1 {
+        (
+            priority_color(&priority),
+            format!("due in {days_until} days"),
+        )
+    } else if days_until == 1 {
+        ("orange", "due tomorrow".to_string())
+    } else if days_until == 0 {
+        ("orange", "due today".to_string())
+    } else {
+        let overdue = -days_until;
+        let plural = if overdue == 1 { "" } else { "s" };
+        ("red", format!("overdue by {overdue} day{plural}"))
+    };
+
+    card(
+        color,
+        format!("[Linear] Reminder: {}", issue.identifier),
+        vec![
+            md_div(&format!("**{}** is {when}", issue.title)),
+            md_div(&format!("**Due:** {}", issue.due_date)),
+            fields(
+                &issue.state,
+                &priority.display(),
+                issue.assignee.as_ref().map(|a| a.name.as_str()),
+            ),
+            view_button(&issue.url),
+        ],
+    )
+}
+
+/// DM to a subscriber about a status change / general update on an issue they
+/// follow. Mirrors [`assign_dm`] but framed as a subscription notification.
+pub fn subscriber_issue_dm(n: &IssueNotification) -> LarkCard {
+    let mut elements = vec![md_div(&format!(
+        "Update on **{}** (you're subscribed)\n{}",
+        n.identifier, n.title
+    ))];
+    if !n.changes.is_empty() {
+        elements.push(md_div(&n.changes.join("\n")));
+    }
+    elements.push(fields(
+        &n.status,
+        &n.priority.display(),
+        n.assignee.as_deref(),
+    ));
+    elements.push(view_button(&n.url));
+
+    card(
+        priority_color(&n.priority),
+        format!("[Linear] Update: {}", n.identifier),
+        elements,
+    )
+}
+
+/// DM to a subscriber about a new comment on an issue they follow.
+pub fn subscriber_comment_dm(
+    identifier: &str,
+    issue_title: &str,
+    author: &str,
+    body: &str,
+    url: &str,
+) -> LarkCard {
+    let issue_ref = if issue_title.is_empty() {
+        "an issue".to_string()
+    } else {
+        format!("{identifier}: {issue_title}")
+    };
+
+    let mut elements = vec![md_div(&format!(
+        "**{author}** commented on **{issue_ref}** (you're subscribed)"
+    ))];
+    let body = truncate(body.trim(), 200);
+    if !body.is_empty() {
+        elements.push(md_div(&body));
+    }
+    elements.push(view_button(url));
+
+    card("blue", format!("[Linear] Comment: {identifier}"), elements)
 }
 
 /// Inline link-preview card from GraphQL-fetched issue data.

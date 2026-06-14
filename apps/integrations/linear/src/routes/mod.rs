@@ -27,8 +27,14 @@ pub async fn serve(state: Arc<AppState>, cancel: CancellationToken) -> anyhow::R
     lark_kit::server::serve("linear", app, port, cancel).await
 }
 
-/// Standalone entrypoint with its own [`ControlHandle`]; serves until killed.
+/// Standalone entrypoint with its own [`ControlHandle`]; runs the webhook server
+/// and reminder scheduler until killed.
 pub async fn run(state: Arc<AppState>, handle: ControlHandle) -> anyhow::Result<()> {
     handle.running().await;
-    serve(state, CancellationToken::new()).await
+    let cancel = CancellationToken::new();
+    tokio::try_join!(
+        serve(state.clone(), cancel.clone()),
+        crate::scheduler::run_scheduler(state, cancel),
+    )?;
+    Ok(())
 }

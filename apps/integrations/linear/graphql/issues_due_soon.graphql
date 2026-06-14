@@ -1,0 +1,43 @@
+query IssuesDueSoon(
+  $after: String
+  $gte: TimelessDateOrDuration!
+  $lte: TimelessDateOrDuration!
+) {
+  issues(
+    first: 100
+    after: $after
+    filter: {
+      dueDate: { gte: $gte, lte: $lte }
+      state: { type: { nin: ["completed", "canceled"] } }
+      assignee: { null: false }
+    }
+  ) {
+    nodes {
+      id
+      identifier
+      title
+      url
+      dueDate
+      priority
+      state {
+        name
+      }
+      assignee {
+        name
+        email
+      }
+      subscribers {
+        nodes {
+          id
+          name
+          email
+          active
+        }
+      }
+    }
+    pageInfo {
+      hasNextPage
+      endCursor
+    }
+  }
+}

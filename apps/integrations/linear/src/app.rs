@@ -41,11 +41,12 @@ impl App for LinearApp {
     }
 
     fn migrations(&self) -> Vec<Box<dyn sea_orm_migration::MigrationTrait>> {
-        crate::db::user_map::migrations()
+        crate::db::migrations()
     }
 
     fn routes(&self, services: &AppServices) -> Option<axum::Router> {
-        Some(crate::db::user_map::router(services.db.clone()))
+        let db = services.db.clone();
+        Some(crate::db::user_map::router(db.clone()).merge(crate::db::settings::router(db)))
     }
 }
 
@@ -56,7 +57,13 @@ struct LinearInstance {
 #[async_trait]
 impl Instance for LinearInstance {
     async fn run(&self, cancel: CancellationToken) -> anyhow::Result<()> {
-        crate::routes::serve(self.state.clone(), cancel).await
+        // The webhook server and the due-date reminder scheduler run together;
+        // both honor `cancel` for cooperative shutdown.
+        tokio::try_join!(
+            crate::routes::serve(self.state.clone(), cancel.clone()),
+            crate::scheduler::run_scheduler(self.state.clone(), cancel),
+        )?;
+        Ok(())
     }
 
     async fn handle_action(&self, action: &str, params: Value) -> anyhow::Result<String> {

@@ -2,6 +2,7 @@
 //! adapter through [`debounce`] to the Lark cards.
 
 pub mod debounce;
+pub mod reminders;
 
 /// Issue priority, normalized from Linear's `0`–`4` scale.
 pub enum Priority {
@@ -52,7 +53,12 @@ impl Priority {
 /// create followed by updates stays a create, and change descriptions merge.
 pub struct IssueNotification {
     pub is_create: bool,
+    /// Whether any update in the window changed the issue's workflow state.
+    /// Drives subscriber fan-out in the default "comments + status changes" mode.
+    pub status_changed: bool,
     pub identifier: String,
+    /// The Linear issue id (for follow-up GraphQL lookups, e.g. subscribers).
+    pub issue_id: String,
     pub title: String,
     pub description: Option<String>,
     pub status: String,

@@ -6,6 +6,7 @@ import { Actions } from "./tabs/Actions";
 import { Config } from "./tabs/Config";
 import { Events } from "./tabs/Events";
 import { LarkApps } from "./tabs/LarkApps";
+import { Linear } from "./tabs/Linear";
 import { Status } from "./tabs/Status";
 
 export function App() {
@@ -29,6 +30,7 @@ export function App() {
         <Route path="status" element={<Status />} />
         <Route path="actions" element={<Actions />} />
         <Route path="lark-apps" element={<LarkApps />} />
+        <Route path="linear" element={<Linear />} />
         <Route path="config" element={<Config />} />
         <Route path="events" element={<Events />} />
         <Route path="*" element={<Navigate to="/status" replace />} />

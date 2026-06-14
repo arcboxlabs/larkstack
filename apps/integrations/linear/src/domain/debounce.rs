@@ -12,6 +12,8 @@ pub struct PendingUpdate {
     pub notif: IssueNotification,
     /// Email to DM if any update in the window changed the assignee.
     pub dm_email: Option<String>,
+    /// The most recent triggering user's id (to exclude from subscriber fan-out).
+    pub actor_id: Option<String>,
     /// Send on this to cancel the currently-scheduled timer task.
     cancel_tx: oneshot::Sender<()>,
 }
@@ -41,10 +43,11 @@ impl DebounceMap {
         key: String,
         mut notif: IssueNotification,
         dm_email: Option<String>,
+        actor_id: Option<String>,
     ) -> oneshot::Receiver<()> {
         let mut map = self.0.lock().await;
 
-        let dm_email = if let Some(existing) = map.remove(&key) {
+        let (dm_email, actor_id) = if let Some(existing) = map.remove(&key) {
             let _ = existing.cancel_tx.send(());
 
             // Accumulate change descriptions; skip exact duplicates.
@@ -55,12 +58,17 @@ impl DebounceMap {
                 }
             }
             notif.changes = changes;
-            // A create followed by updates is still a "create".
+            // A create followed by updates is still a "create"; a status change
+            // anywhere in the window counts for subscriber fan-out.
             notif.is_create = existing.notif.is_create || notif.is_create;
+            notif.status_changed = existing.notif.status_changed || notif.status_changed;
 
-            dm_email.or(existing.dm_email)
+            (
+                dm_email.or(existing.dm_email),
+                actor_id.or(existing.actor_id),
+            )
         } else {
-            dm_email
+            (dm_email, actor_id)
         };
 
         let (cancel_tx, cancel_rx) = oneshot::channel();
@@ -69,6 +77,7 @@ impl DebounceMap {
             PendingUpdate {
                 notif,
                 dm_email,
+                actor_id,
                 cancel_tx,
             },
         );

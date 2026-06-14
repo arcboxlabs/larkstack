@@ -1,0 +1,19 @@
+query IssueSubscribers($id: String!) {
+  issue(id: $id) {
+    identifier
+    title
+    url
+    priority
+    state {
+      name
+    }
+    subscribers {
+      nodes {
+        id
+        name
+        email
+        active
+      }
+    }
+  }
+}

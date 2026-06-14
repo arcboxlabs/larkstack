@@ -13,6 +13,7 @@ mod app;
 mod domain;
 mod lark;
 mod routes;
+mod scheduler;
 mod source;
 
 pub use app::app;

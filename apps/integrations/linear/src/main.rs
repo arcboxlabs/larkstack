@@ -18,7 +18,7 @@ async fn main() -> anyhow::Result<()> {
         PathBuf::from(std::env::var("CONSOLE_DATA_DIR").unwrap_or_else(|_| "data".to_string()));
     std::fs::create_dir_all(&data_dir)?;
     let db = db::open(data_dir.join("apps.db")).await?;
-    db::run_migrations(&db, "linear", linear::db::user_map::migrations()).await?;
+    db::run_migrations(&db, "linear", linear::db::migrations()).await?;
 
     let state = Arc::new(AppState::from_env(db));
     let plane = ControlPlane::new();

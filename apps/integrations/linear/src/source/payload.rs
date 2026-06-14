@@ -12,12 +12,27 @@ pub struct LinearPayload {
     pub url: String,
     #[serde(rename = "updatedFrom")]
     pub updated_from: Option<serde_json::Value>,
+    /// The user who triggered the event (when present). Kept untyped so an
+    /// unexpected shape never fails payload parsing; the id is read via
+    /// [`LinearPayload::actor_id`] to exclude self from subscriber fan-out.
+    #[serde(default)]
+    pub actor: Option<serde_json::Value>,
+}
+
+impl LinearPayload {
+    /// The triggering user's id, if the payload carries an `actor`.
+    pub fn actor_id(&self) -> Option<String> {
+        self.actor
+            .as_ref()
+            .and_then(|a| a.get("id"))
+            .and_then(|v| v.as_str())
+            .map(String::from)
+    }
 }
 
 /// Issue data embedded in a webhook payload.
 #[derive(Debug, Deserialize)]
 pub struct Issue {
-    #[allow(dead_code)]
     pub id: String,
     pub title: String,
     pub priority: u8,
@@ -59,6 +74,10 @@ pub struct CommentData {
     #[allow(dead_code)]
     pub id: String,
     pub body: String,
+    /// The commented issue's id (Linear sends `issueId` alongside `issue`); used
+    /// to fetch subscribers for fan-out.
+    #[serde(default)]
+    pub issue_id: Option<String>,
     pub issue: Option<CommentIssue>,
 }
 
@@ -71,6 +90,8 @@ pub struct CommentIssue {
 /// Actor (user) attached to a webhook event.
 #[derive(Debug, Deserialize)]
 pub struct Actor {
+    #[serde(default)]
+    pub id: Option<String>,
     pub name: String,
     #[allow(dead_code)]
     pub email: Option<String>,
