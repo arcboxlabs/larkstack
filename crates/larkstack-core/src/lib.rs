@@ -18,6 +18,7 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::{RwLock, broadcast, mpsc, watch};
 
 pub mod app;
+pub mod db;
 mod lark;
 mod metrics;
 mod state;

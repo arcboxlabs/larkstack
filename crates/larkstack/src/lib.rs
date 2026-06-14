@@ -164,9 +164,30 @@ impl Larkstack {
         let services = AppServices {
             state: Arc::new(SqliteStateStore::open(data_dir.join("state.db"))?),
             metrics: Arc::new(SqliteMetricsSink::open(data_dir.join("metrics.db"))?),
+            db: larkstack_core::db::open(data_dir.join("apps.db")).await?,
         };
+
+        // Run each app's migrations once at startup, so its tables exist even
+        // before it is enabled (its admin routes may read them). An app whose
+        // migration fails is skipped — not supervised, no routes — and left
+        // Errored, so one bad migration can't take the whole console down.
+        let mut app_routers: Vec<(String, axum::Router)> = Vec::new();
         for app in &self.apps {
+            let name = app.manifest().name;
+            if let Err(e) =
+                larkstack_core::db::run_migrations(&services.db, &name, app.migrations()).await
+            {
+                warn!(app = %name, "migration failed; app disabled: {e:#}");
+                control
+                    .handle(name)
+                    .errored(format!("migration: {e:#}"))
+                    .await;
+                continue;
+            }
             supervisor::supervise(control.clone(), app.clone(), services.clone());
+            if let Some(router) = app.routes(&services) {
+                app_routers.push((name, router));
+            }
         }
         let manifests: Vec<Manifest> = self.apps.iter().map(|a| a.manifest()).collect();
 
@@ -186,7 +207,7 @@ impl Larkstack {
             );
         }
 
-        let router = routes::build(state);
+        let router = routes::build(state, app_routers);
 
         let port: u16 = std::env::var("CONSOLE_PORT")
             .ok()

@@ -127,11 +127,15 @@ impl Modify for SessionScheme {
 
 /// Assemble the full console router: gated `/api/*`, ungated `/auth/*`, the
 /// OpenAPI spec + Scalar docs, and the embedded SPA fallback.
-pub(crate) fn build(state: HostState) -> Router {
+///
+/// `app_routers` are per-App admin routers (each self-stated); they are mounted
+/// at `/api/apps/<name>/` and inherit the same session gate. App routes are not
+/// part of the OpenAPI spec.
+pub(crate) fn build(state: HostState, app_routers: Vec<(String, Router)>) -> Router {
     let gate = axum::middleware::from_fn_with_state(state.clone(), oauth::require_session);
 
     // `/api/*` — session-gated, except `/api/health` (added after `route_layer`).
-    let api = OpenApiRouter::new()
+    let mut api = OpenApiRouter::new()
         .routes(routes!(status::status))
         .routes(routes!(status::apps))
         .routes(routes!(config::get_config, config::put_config))
@@ -139,9 +143,11 @@ pub(crate) fn build(state: HostState) -> Router {
         .routes(routes!(lark_apps::list, lark_apps::upsert))
         .routes(routes!(lark_apps::test))
         .routes(routes!(lark_apps::delete))
-        .routes(routes!(actions::dispatch))
-        .route_layer(gate)
-        .routes(routes!(health));
+        .routes(routes!(actions::dispatch));
+    for (name, router) in app_routers {
+        api = api.nest_service(&format!("/apps/{name}"), router);
+    }
+    let api = api.route_layer(gate).routes(routes!(health));
 
     // `/auth/*` — ungated.
     let auth = OpenApiRouter::new()

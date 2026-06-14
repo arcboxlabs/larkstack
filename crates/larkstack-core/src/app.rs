@@ -9,6 +9,8 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use sea_orm::DatabaseConnection;
+use sea_orm_migration::MigrationTrait;
 use serde::Serialize;
 use serde_json::Value;
 use tokio_util::sync::CancellationToken;
@@ -62,11 +64,15 @@ impl ActionSpec {
 }
 
 /// Framework capabilities handed to an App at build time. Cheap to clone (all
-/// `Arc`). An App namespaces its [`StateStore`] keys under its own name.
+/// `Arc`/pooled handles). An App namespaces its [`StateStore`] keys, and its
+/// [`db`](Self::db) tables, under its own name.
 #[derive(Clone)]
 pub struct AppServices {
     pub state: Arc<dyn StateStore>,
     pub metrics: Arc<dyn MetricsSink>,
+    /// Shared relational store for App-owned tables. Tables an App creates via
+    /// [`App::migrations`] are namespaced `"<app>_"`; see [`crate::db`].
+    pub db: DatabaseConnection,
 }
 
 /// A registered App: a long-lived descriptor that builds a config-bound
@@ -82,6 +88,22 @@ pub trait App: Send + Sync + 'static {
     /// the App errored in the console.
     async fn build(&self, config: &str, services: AppServices)
     -> anyhow::Result<Arc<dyn Instance>>;
+
+    /// Schema migrations for this App's tables in the shared App database. Run
+    /// by the framework before [`build`](Self::build); every table created must
+    /// be namespaced `"<app>_"` (see [`crate::db`]). Empty by default.
+    fn migrations(&self) -> Vec<Box<dyn MigrationTrait>> {
+        Vec::new()
+    }
+
+    /// Optional admin/API routes the host mounts under `/api/apps/<name>/`,
+    /// behind the same session gate as the rest of `/api`. The returned router
+    /// carries its own state (typically [`AppServices::db`]); it is mounted once
+    /// at startup and is independent of config reloads. `None` by default.
+    fn routes(&self, services: &AppServices) -> Option<axum::Router> {
+        let _ = services;
+        None
+    }
 }
 
 /// A live, config-bound App instance. The host drives both methods concurrently.
