@@ -41,7 +41,7 @@ yourself out (admins list omits your account), clear `[console].lark_app` in
 `config.toml` on the server to reopen the console.
 
 Each subsystem's own env vars (`LINEAR_*`, `LARK_*`, `STT_*`, `DIGEST_*`,
-`STANDUP_*`, `PORT`, `DEBOUNCE_DELAY_MS`) are read by its config loader as
+`STANDUP_*`) are read by its config loader as
 fallback defaults. Anything also set in `config.toml` overrides the env at
 runtime; anything left empty in the TOML keeps the env value. Secrets are
 usually kept in env vars; ops fields are edited from the UI.
@@ -51,7 +51,7 @@ usually kept in env vars; ops fields are edited from the UI.
 ```bash
 docker build -t larkstack-console .
 docker run -d --name larkstack-console \
-  -p 8080:8080 -p 3000:3000 \
+  -p 8080:8080 \
   -e CONSOLE_SECRET=$(openssl rand -hex 32) \
   -e LINEAR_WEBHOOK_SECRET=... \
   -e LARK_APP_ID=... -e LARK_APP_SECRET=... \

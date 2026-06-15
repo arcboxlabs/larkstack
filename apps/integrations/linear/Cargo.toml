@@ -6,10 +6,6 @@ edition = "2024"
 authors = ["S3anJia", "AprilNEA <dev@aprilnea.me>"]
 license = "MIT OR Apache-2.0"
 
-[[bin]]
-name = "linear"
-path = "src/main.rs"
-
 [dependencies]
 axum = { workspace = true, features = ["tokio", "http1", "json"] }
 tokio = { workspace = true, features = ["rt-multi-thread", "time", "net", "macros", "sync"] }
@@ -17,7 +13,6 @@ reqwest = { workspace = true, features = ["rustls-tls", "json"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tracing = { workspace = true }
-tracing-subscriber = { workspace = true }
 anyhow = { workspace = true }
 figment = { workspace = true }
 async-trait = { workspace = true }

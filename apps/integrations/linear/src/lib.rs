@@ -17,4 +17,3 @@ mod scheduler;
 mod source;
 
 pub use app::app;
-pub use routes::run;

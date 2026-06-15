@@ -43,15 +43,17 @@ source model and posts via `lark_kit::send_lark_card`. (`linear` keeps its debou
 
 ## Data flow
 
-- **Notifications** (linear, github): a webhook hits the app's server → the source verifies
-  the HMAC, parses the payload, builds a card, and posts to the Lark group webhook (linear
-  debounces rapid issue updates first; github DMs requested reviewers).
-- **Link previews** (linear, x): Lark calls `POST /lark/event` → `lark_kit::event::classify`
-  decrypts/validates and yields the URL → the app fetches details (Linear GraphQL / tweet
-  API) and returns an inline preview card.
+- **Notifications** (linear, github): a webhook hits the app's ingress router (mounted on the
+  console port) → the source verifies the HMAC, parses the payload, builds a card, and posts
+  to the Lark group webhook (linear debounces rapid issue updates first; github DMs requested
+  reviewers).
+- **Link previews** (linear, x): Lark calls `POST /webhooks/<app>/lark/event` →
+  `lark_kit::event::classify` decrypts/validates and yields the URL → the app fetches details
+  (Linear GraphQL / tweet API) and returns an inline preview card.
 
-Each inbound app runs its own HTTP server, so the console config gives them distinct ports
-(`[linear.server] 3000`, `[github.server] 3001`, `[x.server] 3002`).
+Each integration contributes its inbound router via `App::ingress_routes`; the host mounts
+them on the console port under `/webhooks/<app>/`, outside the OAuth session gate (callers
+authenticate with their own HMAC/token). There are no per-app ports.
 
 ## Lark credentials
 

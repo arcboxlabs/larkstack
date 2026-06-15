@@ -11,19 +11,19 @@ Framework crates (`crates/`):
 - **crates/larkstack-core** — The plug-in contract + control plane. `App` (`manifest()` + `build(config) -> Arc<dyn Instance>` + optional `migrations()` + `routes()`) and `Instance` (`run(cancel)` + `handle_action(action, params)`); `Manifest`/`ActionSpec`/`Kind`; the `LarkApp`/`LarkRegistry` credential registry (`[lark-apps.<name>]`); the per-App persistence services handed in via `AppServices` (`StateStore` KV, `MetricsSink`, and the shared relational `db`); the `db` module — a shared-SQLite App-table store with a migration runner that **enforces a per-App `"<app>_"` table-name prefix** (see *App-owned tables* below); plus `ControlPlane`/`ControlHandle`/`Status`/`Event`/`EventStore` and the tracing→event `ControlLayer`. Apps depend only on this crate (plus `lark-kit` for the Lark integrations).
 - **crates/larkstack** — The host (lib). `Larkstack::new().register(app).run()`: a per-app supervisor state machine, the axum admin API (in `src/routes/`, OpenAPI-documented via `utoipa`) + SSE + embedded React UI, the SQLite event store, config load + live reload, graceful shutdown. Depends only on `larkstack-core` (never on apps).
 - **crates/console** — Thin binary `larkstack-console` (~12 lines): registers the bundled apps and runs the host. One process, one deploy.
-- **crates/lark-kit** — Shared toolkit for the Lark **Integration** apps (not the framework). Source-agnostic: the Lark card builders (`card::{card, message, md_div, link_button}`), the group-webhook sender + DM bot, the inbound axum `server::serve`, the per-app `LarkConfig`/`ServerConfig` (+ `[lark-apps]` resolution helpers), the event-callback scaffold (`event::classify`: AES-256-CBC decrypt, challenge, token check, `url.preview.get` → `Callback`), and `verify_hmac_sha256`/`truncate`.
+- **crates/lark-kit** — Shared toolkit for the Lark **Integration** apps (not the framework). Source-agnostic: the Lark card builders (`card::{card, message, md_div, link_button}`), the group-webhook sender + DM bot, the per-app `LarkConfig` (+ `[lark-apps]` resolution helpers), the `slot` state cell (`StateSlot`/`SlotGuard`/`Live`) that backs host-mounted ingress routers, the event-callback scaffold (`event::classify`: AES-256-CBC decrypt, challenge, token check, `url.preview.get` → `Callback`), and `verify_hmac_sha256`/`truncate`.
 
 Apps (`apps/`):
 
-- **apps/integrations/linear** (Integration) — Linear webhook → Lark notifications + issue link previews. `POST /webhook` (debounced issue/comment cards), `POST /lark/event` (preview).
-- **apps/integrations/github** (Integration) — GitHub webhook → Lark notifications. `POST /github/webhook`; octocrab native models; PR/issue/CI/security-alert cards + review-request DMs.
-- **apps/integrations/x** (Integration) — X (Twitter) link previews. `POST /lark/event`; fetches tweet data (`XClient`) and replies with a preview card. Preview-only — no notifications.
+- **apps/integrations/linear** (Integration) — Linear webhook → Lark notifications + issue link previews. `POST /webhooks/linear/webhook` (debounced issue/comment cards), `POST /webhooks/linear/lark/event` (preview).
+- **apps/integrations/github** (Integration) — GitHub webhook → Lark notifications. `POST /webhooks/github/webhook`; octocrab native models; PR/issue/CI/security-alert cards + review-request DMs.
+- **apps/integrations/x** (Integration) — X (Twitter) link previews. `POST /webhooks/x/lark/event`; fetches tweet data (`XClient`) and replies with a preview card. Preview-only — no notifications.
 - **apps/automations/minutes** (Automation) — Auto-transcribe Lark/Feishu recorded meetings and post digest cards. STT via `whisper-api` or `whisper-cpp` (feature flag). Uses `larkoapi` for all Lark API surface.
 - **apps/automations/standup** (Automation) — Daily standup reminder bot. Scheduler + on-demand actions. Uses `larkoapi` over a WebSocket long connection.
 
-The three integrations each own their source + cards and share `lark-kit`; there is **no** cross-app `Event` enum. Each runs its own inbound HTTP server, so the console config gives them distinct ports (`[linear.server] 3000`, `[github.server] 3001`, `[x.server] 3002`).
+The three integrations each own their source + cards and share `lark-kit`; there is **no** cross-app `Event` enum. Each contributes its inbound router via `App::ingress_routes`, which the host mounts on the console port under `/webhooks/<app>/` — so there are no per-app ports.
 
-Single workspace `Cargo.lock` at the root; members are `["crates/*", "apps/*/*"]`. Each app keeps its own `[[bin]]` so it can still run standalone (`cargo run -p linear`) via its `run()` + env-var config, but the deployed artifact is `larkstack-console`.
+Single workspace `Cargo.lock` at the root; members are `["crates/*", "apps/*/*"]`. The deployed artifact is `larkstack-console`; the integration apps (linear/github/x) are libraries with no `[[bin]]` — the console is their only entry point. The automations (minutes/standup) keep a `[[bin]]` for standalone/CLI use.
 
 ### The App contract
 
@@ -36,9 +36,11 @@ An App is a registered descriptor (`fn app() -> Arc<dyn App>`) that builds a con
 
 `App::build` reads its `[name]` section from the full TOML, overlaying env vars (`LINEAR_*`, `LARK_*`, …) per field, so secrets stay in the environment while ops fields are edited from the UI. Toggle an app by flipping `[name].enabled` in the config (UI Config tab → PUT → the supervisor (re)starts it).
 
-**App-owned tables.** Beyond the `StateStore` KV, an App can own relational tables in the shared App database (`<data_dir>/apps.db`, a sea-orm/sqlx SQLite handle on `AppServices.db`). An App declares schema via `App::migrations() -> Vec<Box<dyn MigrationTrait>>` (sea-orm migrations); the host runs them at startup — **before** the app is enabled, so the tables exist for admin use first — through `larkstack_core::db::run_migrations`, the framework's own runner (not sea-orm's `Migrator`). The runner tracks applied migrations per-App in one `_larkstack_migrations(app, name)` table and runs each migration in a transaction that is **rolled back unless every table it creates/drops is namespaced `"<app>_"`** — so the prefix is enforced, not merely conventional (caveat: cross-App *alters* aren't detectable and aren't blocked). A migration failure leaves just that app Errored, not the whole console. An App can also expose admin endpoints via `App::routes(&services) -> Option<Router>`; the host mounts the (self-stated) router at `/api/apps/<name>/` behind the same session gate (not in the OpenAPI spec). First consumer: linear's `user_map` (Linear→Lark email overrides).
+**App-owned tables.** Beyond the `StateStore` KV, an App can own relational tables in the shared App database (`<data_dir>/apps.db`, a sea-orm/sqlx SQLite handle on `AppServices.db`). An App declares schema via `App::migrations() -> Vec<Box<dyn MigrationTrait>>` (sea-orm migrations); the host runs them at startup — **before** the app is enabled, so the tables exist for admin use first — through `larkstack_core::db::run_migrations`, the framework's own runner (not sea-orm's `Migrator`). The runner tracks applied migrations per-App in one `_larkstack_migrations(app, name)` table and runs each migration in a transaction that is **rolled back unless every table it creates/drops is namespaced `"<app>_"`** — so the prefix is enforced, not merely conventional (caveat: cross-App *alters* aren't detectable and aren't blocked). A migration failure leaves just that app Errored, not the whole console.
 
-**Lark-app registry.** Lark credentials live once under `[lark-apps.<name>] = { app_id, app_secret, base_url }`; an app binds to one with `lark_app = "<name>"` in its own section (resolved in each app's `from_toml`, before the inline `[<app>].lark` / env overlay, which still works for standalone bins). Onboard/manage entries from the console's **Lark Apps** tab, which live-tests the credentials (mints a `tenant_access_token`) before saving. Credentials are stored plaintext in `config.toml` (gated behind the console's Lark-OAuth session); the registry GET redacts `app_secret`.
+**App-contributed routes.** An App can expose admin endpoints via `App::routes(&services) -> Option<Router>` (mounted at `/api/apps/<name>/`, **behind** the session gate; first consumer: linear's `user_map`, Linear→Lark email overrides) and public inbound endpoints via `App::ingress_routes(&services) -> Option<Router>` (mounted at `/webhooks/<name>/`, **outside** the gate — webhooks authenticate with their own HMAC/token). Both are self-stated and absent from the OpenAPI spec. Ingress routers are mounted **once** at startup, but an integration's `AppState` is rebuilt on every config reload — so the app publishes its live state into a `lark_kit::StateSlot` held on the (process-lifetime) App descriptor: the running `Instance` stores into the slot on `run` and clears it via a `SlotGuard` on stop, and the handler reads the current `AppState` through the `lark_kit::Live` extractor (or returns `503` while the app is down/reloading).
+
+**Lark-app registry.** Lark credentials live once under `[lark-apps.<name>] = { app_id, app_secret, base_url }`; an app binds to one with `lark_app = "<name>"` in its own section (resolved in each app's `from_toml`, before the inline `[<app>].lark` / env overlay). Onboard/manage entries from the console's **Lark Apps** tab, which live-tests the credentials (mints a `tenant_access_token`) before saving. Credentials are stored plaintext in `config.toml` (gated behind the console's Lark-OAuth session); the registry GET redacts `app_secret`.
 
 **Frontend** lives in `dashboard/` at the repo root (React + Vite, **pnpm**). `pnpm build` emits to `dashboard/dist/`, which `rust-embed` bakes into the host at compile time (the host crate embeds `../../dashboard/dist/`). `crates/larkstack/build.rs` writes a stub `index.html` if the frontend isn't built yet so `cargo build` always succeeds.
 
@@ -56,6 +58,8 @@ Without direnv, drop into the same shell via `devenv shell`.
 
 Note: `.envrc` calls `eval "$(devenv print-dev-env)"` directly instead of `use devenv` to sidestep a SIGABRT bug in devenv 2.1.2's `direnv-export` subcommand on macOS.
 
+**Docs convention:** this file is `AGENTS.md`; `CLAUDE.md` is a symlink to it (same for each crate) — edit `AGENTS.md`, since writing through the symlink fails. Per-app specifics live in `apps/<…>/AGENTS.md` (e.g. `apps/integrations/linear/AGENTS.md`); read that crate's file before working inside it.
+
 ## Build Commands
 
 Workspace commands run from the repo root.
@@ -64,15 +68,17 @@ Workspace commands run from the repo root.
 cargo fmt --all -- --check                                  # format
 cargo clippy --workspace --all-targets -- -D warnings       # lint
 cargo test --workspace
+cargo test -p larkstack-core db::tests                      # one crate + filter (run a single test / module)
 cargo build -p console --release                            # umbrella binary -> target/release/larkstack-console
-cargo build -p linear --release                             # standalone app bins
-cargo build -p github --release
-cargo build -p x --release
-cargo build -p minutes --release
-cargo build -p standup --release
+cargo build -p standup --release                            # automations still ship a [[bin]] (minutes likewise); integrations are libs
 
-# Frontend (required before `cargo build -p console` for a non-stub UI)
+# Run the console locally (debug); state under ./data (CONSOLE_DATA_DIR), UI on :8080 (CONSOLE_PORT)
+cargo run -p console
+
+# Frontend: embedded build — required before `cargo build -p console` for a non-stub UI
 cd dashboard && pnpm install && pnpm build
+# Frontend dev loop: Vite dev server (hot reload) proxies /api + /auth to a console on :8080
+cd dashboard && pnpm dev        # run alongside `cargo run -p console`
 ```
 
 ## crates/larkstack (host)
@@ -91,6 +97,7 @@ Routes:
 - `GET /api/lark-apps` — registered Lark apps `{ "lark_apps": [{ name, app_id, base_url, has_secret }] }` (`app_secret` redacted). `POST /api/lark-apps` — body `{ name, app_id, app_secret, base_url? }`; **live-tests** the credentials and, only if valid, upserts `[lark-apps.<name>]` via `toml_edit` (comments preserved) + broadcasts. `400` if the test fails (nothing saved). `POST /api/lark-apps/test` — dry-run the same check without saving (`200 {ok, expire|error}`). `DELETE /api/lark-apps/{name}` — remove an entry (`404` if absent).
 - `POST /api/actions/{app}/{action}` — fire-and-forget; body is the optional `params` JSON. `202` on dispatch, `404` unknown app, `503` app not running. The result string from `Instance::handle_action` appears in the SSE event stream.
 - `/api/apps/{app}/*` — App-contributed admin routes (`App::routes`), mounted per registered app behind the session gate; shape is App-defined (e.g. linear's `GET/POST /api/apps/linear/user-map`, `DELETE /api/apps/linear/user-map/{linear_email}`). Not part of the OpenAPI spec.
+- `/webhooks/{app}/*` — App-contributed public inbound routes (`App::ingress_routes`), mounted per registered app **outside** the session gate (callers authenticate with their own HMAC/token, not a console session): `POST /webhooks/linear/webhook` + `/webhooks/linear/lark/event`, `POST /webhooks/github/webhook`, `POST /webhooks/x/lark/event`. Not part of the OpenAPI spec.
 - **Auth (Lark OAuth, `src/routes/oauth.rs`)** — `GET /auth/login` (mint state + PKCE, redirect to Lark's `accounts.*/open-apis/authen/v1/authorize`), `GET /auth/callback` (verify state, exchange the code at `open.*/open-apis/authen/v2/oauth/token`, fetch `user_info`, check the `admins` allowlist, set a signed session cookie), `POST /auth/logout` (clear it), `GET /auth/me` (ungated — `{ auth_required, authenticated, user? }`; the UI uses it to decide whether to show the login screen). `/api/*` (except `/api/health`, `/api/openapi.json`, `/api/docs`) is gated by the signed-cookie session, resolved per-request from the live config, and stays OPEN while `[console].lark_app` is unbound.
 - `GET /api/openapi.json` — the OpenAPI 3.1 spec, generated by `utoipa` from the route definitions. `GET /api/docs` — a Scalar API explorer over it (the page loads Scalar's JS from a CDN). Both ungated: the spec is shapes only, no data.
 - `GET /api/health` — `"ok"`. `GET /*` — embedded React SPA (falls back to `index.html`).
@@ -107,15 +114,15 @@ Thin binary: `Larkstack::new().register(linear::app()).register(github::app()).r
 
 ## apps/integrations/{linear, github, x} + crates/lark-kit
 
-Each integration is its own App crate (own source + cards + `AppState` + `[[bin]]`), all building on **`crates/lark-kit`** (the Lark sink/server/config/crypto toolkit; see *Architecture*). They share no `Event` enum — each builds cards directly from its source models and posts via `lark_kit::send_lark_card`. Every app's `from_toml` reads its `[<app>]` section, resolves an optional `lark_app = "<name>"` against `[lark-apps]` (via `LarkConfig::apply_lark_app`), then overlays `[<app>.lark]`. Each `run::serve` builds an axum router and hands it to `lark_kit::server::serve`.
+Each integration is its own App crate (own source + cards + `AppState`), all building on **`crates/lark-kit`** (the Lark sink/config/crypto/slot toolkit; see *Architecture*). They share no `Event` enum — each builds cards directly from its source models and posts via `lark_kit::send_lark_card`. Every app's `from_toml` reads its `[<app>]` section, resolves an optional `lark_app = "<name>"` against `[lark-apps]` (via `LarkConfig::apply_lark_app`), then overlays `[<app>.lark]`. Each app's `routes`/`run` module exposes `ingress_router(slot) -> Router`, which `App::ingress_routes` hands to the host to mount at `/webhooks/<app>/`; handlers read live state via the `lark_kit::Live` extractor.
 
-**linear** (`apps/integrations/linear`) is organized by boundary: `routes/` is the inbound HTTP surface (`routes::webhook` + `routes::preview`), `domain/` the normalized core (`IssueNotification`/`Priority` + `debounce`), `source/` the Linear adapter (`payload` webhook types, `changes` detection, `api` GraphQL client), `lark/` the Lark adapter (`cards` + `notify`). Flow: `POST /webhook` (HMAC `linear-signature`) → `source::payload` normalizes to `domain::IssueNotification` → `domain::debounce` (issues) → `lark::cards::issue_card`/`comment_card` → group webhook + assignee DM. `POST /lark/event` → `routes::preview` (via `lark_kit::event::classify`) → `source::api` GraphQL fetch → `lark::cards::preview_card`. The `api` GraphQL bindings are generated by `graphql_client` from the committed `graphql/schema.graphql` (a pinned lock; refresh from Linear's SDK with the `update-linear-schema` devenv script). Env: `LINEAR_*`, `LARK_*`; `[linear.server]` adds `debounce_delay_ms`.
+**linear** (`apps/integrations/linear`) is organized by boundary: `routes/` is the inbound HTTP surface (`routes::webhook` + `routes::preview`), `domain/` the normalized core (`IssueNotification`/`Priority` + `debounce`), `source/` the Linear adapter (`payload` webhook types, `changes` detection, `api` GraphQL client), `lark/` the Lark adapter (`cards` + `notify`). Flow: `POST /webhooks/linear/webhook` (HMAC `linear-signature`) → `source::payload` normalizes to `domain::IssueNotification` → `domain::debounce` (issues) → `lark::cards::issue_card`/`comment_card` → group webhook + assignee DM. `POST /webhooks/linear/lark/event` → `routes::preview` (via `lark_kit::event::classify`) → `source::api` GraphQL fetch → `lark::cards::preview_card`. The `api` GraphQL bindings are generated by `graphql_client` from the committed `graphql/schema.graphql` (a pinned lock; refresh from Linear's SDK with the `update-linear-schema` devenv script). Env: `LINEAR_*`, `LARK_*`; `[linear].debounce_delay_ms` tunes the issue-update coalescing window.
 
-**github** (`apps/integrations/github`): `POST /github/webhook` (`X-Hub-Signature-256`, repo whitelist) → octocrab native `WebhookEvent` → `cards::*` (PR opened/review-requested/merged, alert-labeled issues, failed CI, secret-scanning, critical/high Dependabot) → group webhook + review-request DM (`user_map`: GitHub login → Lark email). `build()` errors if `webhook_secret` is empty. Env: `GITHUB_*`, `LARK_*`.
+**github** (`apps/integrations/github`): `POST /webhooks/github/webhook` (`X-Hub-Signature-256`, repo whitelist) → octocrab native `WebhookEvent` → `cards::*` (PR opened/review-requested/merged, alert-labeled issues, failed CI, secret-scanning, critical/high Dependabot) → group webhook + review-request DM (`user_map`: GitHub login → Lark email). `build()` errors if `webhook_secret` is empty. Env: `GITHUB_*`, `LARK_*`.
 
-**x** (`apps/integrations/x`): `POST /lark/event` (`lark_kit::event::classify` handles decrypt/token) → `source::XClient` fetches the tweet (fxtwitter → X API v2 → oEmbed; `X_BEARER_TOKEN` optional) → `cards::x_preview`. Preview-only, no notifications.
+**x** (`apps/integrations/x`): `POST /webhooks/x/lark/event` (`lark_kit::event::classify` handles decrypt/token) → `source::XClient` fetches the tweet (fxtwitter → X API v2 → oEmbed; `X_BEARER_TOKEN` optional) → `cards::x_preview`. Preview-only, no notifications.
 
-Each runs its own axum server on its `[<app>.server].port` (defaults: linear 3000, github 3001, x 3002).
+Each app contributes its router via `App::ingress_routes`; the host mounts them on the console port under `/webhooks/<app>/` (no per-app ports).
 
 ## apps/automations/minutes
 
@@ -159,6 +166,8 @@ The repo-relative `.cargo/config.toml` carries a hard-coded musl cross-compile l
 ## Lark API Patterns
 
 All apps target Lark (international: `open.larksuite.com`, China: `open.feishu.cn`). Base URL is configurable; most Lark surface comes from the `larkoapi` crate.
+
+**Rule — foundational Lark API changes go upstream to `larkoapi`.** When a basic Lark endpoint is missing, broken, or needs new behavior, fix it in the `larkoapi` crate (then bump the dependency here) — do **not** add a local wrapper or hand-roll the HTTP/protobuf call in this repo. `larkoapi` is the single source of raw Lark API surface; app and `lark-kit` code build on it, never around it. (This is about the underlying API client itself; Lark-flavored helpers that compose it — card builders, the webhook sender, the event-callback scaffold — still belong in `lark-kit`.)
 
 - **Token caching**: Tenant access tokens are cached with a 5-minute expiry buffer.
 - **Card format**: JSON 1.0 (`header` + `elements` at top level). Use `column_set` for multi-column layout, `action` for button rows. Buttons cannot be nested inside `column` elements.

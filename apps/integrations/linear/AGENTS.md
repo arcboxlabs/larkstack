@@ -1,7 +1,7 @@
 # AGENTS.md — linear
 
 Linear integration: Linear webhook → Lark notifications, plus Linear issue link
-previews inside Lark. Builds on `lark-kit` (Lark sink/server/crypto) and
+previews inside Lark. Builds on `lark-kit` (Lark sink/config/crypto + the ingress state slot) and
 `larkstack-core` (the `App`/`Instance` contract). See the repo-root `AGENTS.md`
 for framework-level context; this file covers only what's specific to this crate.
 
@@ -9,10 +9,11 @@ for framework-level context; this file covers only what's specific to this crate
 
 The tree follows the data path — HTTP in, normalize, adapt out:
 
-- **`routes/`** — inbound HTTP surface.
-  - `mod.rs` — `Router` + `serve()`/`run()`, handed to `lark_kit::server::serve`.
-  - `webhook.rs` — `POST /webhook`: HMAC-verify → parse → normalize → debounce/dispatch.
-  - `preview.rs` — `POST /lark/event`: Lark `url.preview.get` callback → link preview.
+- **`routes/`** — inbound HTTP surface (mounted by the host at `/webhooks/linear/`).
+  - `mod.rs` — `ingress_router(slot)`: builds the `Router` whose handlers read live
+    `AppState` from the `lark_kit::StateSlot` via the `Live` extractor.
+  - `webhook.rs` — `POST /webhooks/linear/webhook`: HMAC-verify → parse → normalize → debounce/dispatch.
+  - `preview.rs` — `POST /webhooks/linear/lark/event`: Lark `url.preview.get` callback → link preview.
 - **`domain/`** — normalized core, independent of HTTP/Linear/Lark.
   - `mod.rs` — `IssueNotification`, `Priority` (Linear's 0–4 scale normalized).
   - `debounce.rs` — `DebounceMap`: coalesces rapid issue updates into one card.
@@ -42,14 +43,14 @@ The tree follows the data path — HTTP in, normalize, adapt out:
   - `due_reminders/` — dedup ledger (`linear_due_reminders`, PK
     `(issue_id, due_date, tier)`); `already_sent`/`record` so each cadence tier
     fires once per deadline.
-- **top level** — wiring: `app.rs` (`App`/`Instance`; `run` joins webhook server +
-  scheduler; `migrations`/`routes`), `config.rs` (`AppState` + TOML/env),
-  `actions.rs` (console actions: `ping`, `test-lark`), `main.rs` (standalone bin),
-  `lib.rs`.
+- **top level** — wiring: `app.rs` (`App`/`Instance`; `ingress_routes` publishes the
+  `StateSlot`, `run` publishes live state + drives the reminder scheduler,
+  `migrations`/`routes`), `config.rs` (`AppState` + TOML/env), `actions.rs` (console
+  actions: `ping`, `test-lark`), `lib.rs`.
 
 ## Flows
 
-**Notifications** (`POST /webhook`): verify `linear-signature` HMAC → parse
+**Notifications** (`POST /webhooks/linear/webhook`): verify `linear-signature` HMAC → parse
 `source::payload::LinearPayload` → match `(type, action)`:
 - `Issue` create/update → `domain::IssueNotification` → `domain::debounce` (merge
   within the window) → `lark::cards::issue_card` → `lark::notify::group` +
@@ -75,7 +76,7 @@ today + max(lead_days)]`, and for each issue picks `domain::reminders::current_t
 are admin-tuned in `settings`; default `T-7/T-3/T-1/day-of` + daily overdue (cap 7).
 Needs `LINEAR_API_KEY`.
 
-**Link previews** (`POST /lark/event`): `lark_kit::event::classify`
+**Link previews** (`POST /webhooks/linear/lark/event`): `lark_kit::event::classify`
 (decrypt/token/challenge) → `source::api::extract_identifier_from_url` →
 `LinearClient::fetch_issue_by_identifier` (GraphQL) → `lark::cards::preview_card`
 → inline reply. Requires `LINEAR_API_KEY`; no-ops without it.
@@ -114,15 +115,15 @@ for drift, not as a generator.
 
 ## Config / env
 
-`App::build` reads `[linear]` from the full config TOML, overlaying env per field;
-the standalone bin reads env only. `config.toml` carries only secrets/bindings;
+`App::build` reads `[linear]` from the full config TOML, overlaying env per field.
+`config.toml` carries only secrets/bindings;
 **behavioral toggles live in the `linear_settings` DB row**, edited live from the
 console's **Linear** tab (no restart).
 - `LINEAR_WEBHOOK_SECRET` — HMAC secret (required for the webhook path).
 - `LINEAR_API_KEY` — Linear GraphQL key; **optional**, but required for link
   previews, **due-date reminders, and subscriber fan-out** (all no-op without it).
 - `LARK_*` / `lark_app = "<name>"` — Lark sink (group webhook + bot DM); see root `AGENTS.md`.
-- `[linear.server].port` (default `3000`); `debounce_delay_ms` / `DEBOUNCE_DELAY_MS` (default `5000`).
+- `[linear].debounce_delay_ms` (default `5000`) — issue-update coalescing window.
 
 ## Commands
 
@@ -130,6 +131,5 @@ console's **Linear** tab (no restart).
 cargo build -p linear
 cargo clippy -p linear --all-targets -- -D warnings
 cargo test -p linear
-cargo run -p linear            # standalone, env-configured
 update-linear-schema           # refresh graphql/schema.graphql (in the devenv shell)
 ```

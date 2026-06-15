@@ -6,9 +6,9 @@ use std::sync::Arc;
 
 use axum::{
     body::Bytes,
-    extract::State,
     http::{HeaderMap, StatusCode},
 };
+use lark_kit::Live;
 use lark_kit::card::LarkCard;
 use tracing::{error, info, warn};
 
@@ -25,7 +25,7 @@ use crate::source::payload::{Actor, CommentData, Issue, LinearPayload, UpdatedFr
 /// 2. Deserializes the [`LinearPayload`].
 /// 3. Debounces issue creates/updates; dispatches comments immediately.
 pub async fn webhook_handler(
-    State(state): State<Arc<AppState>>,
+    Live(state): Live<AppState>,
     headers: HeaderMap,
     body: Bytes,
 ) -> StatusCode {

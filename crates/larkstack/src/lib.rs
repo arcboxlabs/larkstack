@@ -30,7 +30,9 @@ const DEFAULT_CONFIG: &str = r#"# larkstack console config
 # the matching environment variable (LINEAR_*, LARK_*, GITHUB_*, X_BEARER_TOKEN,
 # STT_*, DIGEST_*, STANDUP_*), so secrets can stay in the environment.
 #
-# Each inbound integration runs its own HTTP server — give them distinct ports.
+# Inbound integrations are served on the console port under /webhooks/<app>/:
+# linear → /webhooks/linear/webhook + /webhooks/linear/lark/event, github →
+# /webhooks/github/webhook, x → /webhooks/x/lark/event. No per-app ports.
 #
 # Lark credentials live in a shared registry. Register them here, or onboard
 # them from the console's "Lark Apps" tab (which live-tests them). An app then
@@ -57,13 +59,11 @@ enabled = false
 # lark_app = "main"            # bind to [lark-apps.main]; or set app_id/secret in [linear.lark]
 # webhook_secret = ""          # Linear webhook `linear-signature` HMAC secret
 # api_key = ""                 # Linear GraphQL key — enables issue link previews
+# debounce_delay_ms = 5000     # issue-update coalescing window (ms)
 [linear.lark]
 # webhook_url = ""
-# verification_token = ""      # token for the Linear link-preview app (POST /lark/event)
+# verification_token = ""      # token for the link-preview app (POST /webhooks/linear/lark/event)
 # base_url = "https://open.larksuite.com"
-[linear.server]
-port = 3000
-# debounce_delay_ms = 5000
 
 [github]
 enabled = false
@@ -75,18 +75,14 @@ enabled = false
 [github.lark]
 # webhook_url = ""
 # base_url = "https://open.larksuite.com"
-[github.server]
-port = 3001
 
 [x]
 enabled = false
 # lark_app = "main"
 [x.lark]
-# verification_token = ""      # token for the X link-preview app (POST /lark/event)
+# verification_token = ""      # token for the X link-preview app (POST /webhooks/x/lark/event)
 # encrypt_key = ""             # X app Encrypt Key; decrypts AES-256-CBC callbacks
 # base_url = "https://open.larksuite.com"
-[x.server]
-port = 3002
 
 [minutes]
 enabled = false
@@ -172,6 +168,7 @@ impl Larkstack {
         // migration fails is skipped — not supervised, no routes — and left
         // Errored, so one bad migration can't take the whole console down.
         let mut app_routers: Vec<(String, axum::Router)> = Vec::new();
+        let mut ingress_routers: Vec<(String, axum::Router)> = Vec::new();
         for app in &self.apps {
             let name = app.manifest().name;
             if let Err(e) =
@@ -186,7 +183,10 @@ impl Larkstack {
             }
             supervisor::supervise(control.clone(), app.clone(), services.clone());
             if let Some(router) = app.routes(&services) {
-                app_routers.push((name, router));
+                app_routers.push((name.clone(), router));
+            }
+            if let Some(router) = app.ingress_routes(&services) {
+                ingress_routers.push((name, router));
             }
         }
         let manifests: Vec<Manifest> = self.apps.iter().map(|a| a.manifest()).collect();
@@ -207,7 +207,7 @@ impl Larkstack {
             );
         }
 
-        let router = routes::build(state, app_routers);
+        let router = routes::build(state, app_routers, ingress_routers);
 
         let port: u16 = std::env::var("CONSOLE_PORT")
             .ok()

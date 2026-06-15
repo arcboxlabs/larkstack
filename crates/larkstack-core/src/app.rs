@@ -104,6 +104,21 @@ pub trait App: Send + Sync + 'static {
         let _ = services;
         None
     }
+
+    /// Optional public inbound routes (webhooks, Lark event callbacks) the host
+    /// mounts under `/webhooks/<name>/`, **outside** the OAuth session gate —
+    /// callers are external systems authenticating with their own HMAC/token, not
+    /// a console session. Mounted once at startup, so the router must read its
+    /// config-built state at request time rather than capture it: pair a
+    /// [`lark_kit`-style `StateSlot`] held on the App descriptor with the live
+    /// instance, which publishes into it on `run`. `None` by default.
+    ///
+    /// [`lark_kit`-style `StateSlot`]: this crate stays Lark-agnostic, so the slot
+    /// type lives in `lark-kit`; the host only nests the returned router.
+    fn ingress_routes(&self, services: &AppServices) -> Option<axum::Router> {
+        let _ = services;
+        None
+    }
 }
 
 /// A live, config-bound App instance. The host drives both methods concurrently.

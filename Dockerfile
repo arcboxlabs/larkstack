@@ -34,9 +34,8 @@ RUN apt-get update \
 COPY --from=rust-builder /build/target/release/larkstack-console /usr/local/bin/larkstack-console
 ENV CONSOLE_DATA_DIR=/data
 ENV CONSOLE_PORT=8080
+# Admin UI + API + integration webhooks (/webhooks/<app>/) all on the one port.
 EXPOSE 8080
-# Inbound integration webhook listeners (linear/github/x — see [<app>.server].port).
-EXPOSE 3000 3001 3002
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
     CMD ["sh", "-c", "wget -q --spider http://127.0.0.1:${CONSOLE_PORT}/api/health || exit 1"]
 CMD ["larkstack-console"]

@@ -105,32 +105,3 @@ impl LarkConfig {
         }
     }
 }
-
-fn default_port() -> u16 {
-    3000
-}
-
-/// The inbound HTTP server's listen port.
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct ServerConfig {
-    #[serde(default = "default_port")]
-    pub port: u16,
-}
-
-impl Default for ServerConfig {
-    fn default() -> Self {
-        Self {
-            port: default_port(),
-        }
-    }
-}
-
-impl ServerConfig {
-    pub fn from_env() -> Result<Self, Box<figment::Error>> {
-        Figment::new()
-            .merge(figment::providers::Serialized::defaults(Self::default()))
-            .merge(Env::raw().only(&["PORT"]))
-            .extract()
-            .map_err(Box::new)
-    }
-}

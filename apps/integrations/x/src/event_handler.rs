@@ -2,9 +2,8 @@
 //! `url.preview.get` callback. Decryption/token/challenge handling lives in
 //! `lark_kit::event`; this only fetches the tweet and builds the card.
 
-use std::sync::Arc;
-
-use axum::{Json, body::Bytes, extract::State, http::StatusCode};
+use axum::{Json, body::Bytes, http::StatusCode};
+use lark_kit::Live;
 use lark_kit::event::{Callback, classify, inline_card};
 use serde_json::{Value, json};
 use tracing::info;
@@ -12,7 +11,7 @@ use tracing::info;
 use crate::config::AppState;
 
 pub async fn lark_event_handler(
-    State(state): State<Arc<AppState>>,
+    Live(state): Live<AppState>,
     body: Bytes,
 ) -> (StatusCode, Json<Value>) {
     match classify(

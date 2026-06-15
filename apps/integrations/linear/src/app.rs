@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use lark_kit::{SlotGuard, StateSlot};
 use larkstack_core::{ActionSpec, App, AppServices, Instance, Kind, Manifest};
 use serde_json::Value;
 use tokio_util::sync::CancellationToken;
@@ -9,10 +10,16 @@ use crate::config::AppState;
 
 /// The registered App for the console host.
 pub fn app() -> Arc<dyn App> {
-    Arc::new(LinearApp)
+    Arc::new(LinearApp {
+        slot: lark_kit::slot(),
+    })
 }
 
-struct LinearApp;
+struct LinearApp {
+    /// Live state cell shared by the host-mounted ingress router (read side) and
+    /// each running [`LinearInstance`] (write side); lives for the app's lifetime.
+    slot: StateSlot<AppState>,
+}
 
 #[async_trait]
 impl App for LinearApp {
@@ -37,6 +44,7 @@ impl App for LinearApp {
             AppState::from_toml(config, services.db).map_err(|e| anyhow::anyhow!("config: {e}"))?;
         Ok(Arc::new(LinearInstance {
             state: Arc::new(state),
+            slot: self.slot.clone(),
         }))
     }
 
@@ -48,22 +56,26 @@ impl App for LinearApp {
         let db = services.db.clone();
         Some(crate::db::user_map::router(db.clone()).merge(crate::db::settings::router(db)))
     }
+
+    fn ingress_routes(&self, _services: &AppServices) -> Option<axum::Router> {
+        Some(crate::routes::ingress_router(self.slot.clone()))
+    }
 }
 
 struct LinearInstance {
     state: Arc<AppState>,
+    slot: StateSlot<AppState>,
 }
 
 #[async_trait]
 impl Instance for LinearInstance {
     async fn run(&self, cancel: CancellationToken) -> anyhow::Result<()> {
-        // The webhook server and the due-date reminder scheduler run together;
-        // both honor `cancel` for cooperative shutdown.
-        tokio::try_join!(
-            crate::routes::serve(self.state.clone(), cancel.clone()),
-            crate::scheduler::run_scheduler(self.state.clone(), cancel),
-        )?;
-        Ok(())
+        // Publish state for the host-mounted ingress router; the guard clears the
+        // slot when this run ends (shutdown or crash). The webhook server now
+        // lives on the console port, so `run` only drives the reminder scheduler,
+        // which honors `cancel`.
+        let _guard = SlotGuard::publish(self.slot.clone(), self.state.clone());
+        crate::scheduler::run_scheduler(self.state.clone(), cancel).await
     }
 
     async fn handle_action(&self, action: &str, params: Value) -> anyhow::Result<String> {

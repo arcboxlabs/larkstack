@@ -15,11 +15,15 @@ Rust middleware that syncs [Linear](https://linear.app/) events to
 
 ## Endpoints
 
+All integration endpoints are served on the console port under `/webhooks/<app>/`.
+
 | Method | Path | Purpose |
 | :--- | :--- | :--- |
-| `POST` | `/webhook` | Linear webhook receiver |
-| `POST` | `/lark/event` | Lark event callback (challenge + link preview) |
-| `GET`  | `/health` | Health check |
+| `POST` | `/webhooks/linear/webhook` | Linear webhook receiver |
+| `POST` | `/webhooks/linear/lark/event` | Lark event callback (challenge + link preview) |
+| `POST` | `/webhooks/github/webhook` | GitHub webhook receiver |
+| `POST` | `/webhooks/x/lark/event` | Lark callback for X link previews |
+| `GET`  | `/api/health` | Health check |
 
 ## Next steps
 

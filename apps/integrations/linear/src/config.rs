@@ -1,4 +1,4 @@
-use lark_kit::{LarkBotClient, LarkConfig, ServerConfig, TomlLark};
+use lark_kit::{LarkBotClient, LarkConfig, TomlLark};
 use larkstack_core::LarkRegistry;
 use reqwest::Client;
 use sea_orm::DatabaseConnection;
@@ -39,11 +39,11 @@ impl LinearConfig {
     }
 }
 
-/// Shared application state, wrapped in `Arc` and passed to every handler.
+/// Shared application state, wrapped in `Arc` and published into the ingress
+/// router's [`lark_kit::StateSlot`] while the app runs.
 pub struct AppState {
     pub linear: LinearConfig,
     pub lark: LarkConfig,
-    pub server: ServerConfig,
     pub debounce_delay_ms: u64,
     pub http: Client,
     pub bot: Option<LarkBotClient>,
@@ -67,33 +67,13 @@ struct Section {
     lark_app: Option<String>,
     webhook_secret: Option<String>,
     api_key: Option<String>,
+    /// Issue-update coalescing window (ms); the only ops knob left in `[linear]`.
+    debounce_delay_ms: Option<u64>,
     #[serde(default)]
     lark: TomlLark,
-    #[serde(default)]
-    server: TomlServer,
-}
-
-#[derive(Debug, Deserialize, Default)]
-struct TomlServer {
-    port: Option<u16>,
-    debounce_delay_ms: Option<u64>,
 }
 
 impl AppState {
-    pub fn from_env(db: DatabaseConnection) -> Self {
-        let debounce_delay_ms = std::env::var("DEBOUNCE_DELAY_MS")
-            .ok()
-            .and_then(|s| s.parse().ok())
-            .unwrap_or_else(default_debounce);
-        Self::from_parts(
-            LinearConfig::from_env(),
-            LarkConfig::from_env().expect("invalid lark config"),
-            ServerConfig::from_env().expect("invalid server config"),
-            debounce_delay_ms,
-            db,
-        )
-    }
-
     /// Build state from a full config TOML containing a `[linear]` section.
     pub fn from_toml(full_toml: &str, db: DatabaseConnection) -> Result<Self, Box<figment::Error>> {
         let top: TopLevel =
@@ -119,30 +99,14 @@ impl AppState {
         }
         lark.overlay(section.lark);
 
-        let mut server = ServerConfig::from_env().unwrap_or_default();
-        if let Some(p) = section.server.port {
-            server.port = p;
-        }
-        let debounce_delay_ms = section.server.debounce_delay_ms.unwrap_or_else(|| {
-            std::env::var("DEBOUNCE_DELAY_MS")
-                .ok()
-                .and_then(|s| s.parse().ok())
-                .unwrap_or_else(default_debounce)
-        });
+        let debounce_delay_ms = section.debounce_delay_ms.unwrap_or_else(default_debounce);
 
-        Ok(Self::from_parts(
-            linear,
-            lark,
-            server,
-            debounce_delay_ms,
-            db,
-        ))
+        Ok(Self::from_parts(linear, lark, debounce_delay_ms, db))
     }
 
     fn from_parts(
         linear: LinearConfig,
         lark: LarkConfig,
-        server: ServerConfig,
         debounce_delay_ms: u64,
         db: DatabaseConnection,
     ) -> Self {
@@ -153,7 +117,6 @@ impl AppState {
         Self {
             linear,
             lark,
-            server,
             debounce_delay_ms,
             http,
             bot,

@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use lark_kit::{SlotGuard, StateSlot};
 use larkstack_core::{ActionSpec, App, AppServices, Instance, Kind, Manifest};
 use serde_json::Value;
 use tokio_util::sync::CancellationToken;
@@ -9,10 +10,16 @@ use crate::config::AppState;
 
 /// The registered App for the console host.
 pub fn app() -> Arc<dyn App> {
-    Arc::new(GitHubApp)
+    Arc::new(GitHubApp {
+        slot: lark_kit::slot(),
+    })
 }
 
-struct GitHubApp;
+struct GitHubApp {
+    /// Live state cell shared by the host-mounted ingress router (read side) and
+    /// each running [`GitHubInstance`] (write side); lives for the app's lifetime.
+    slot: StateSlot<AppState>,
+}
 
 #[async_trait]
 impl App for GitHubApp {
@@ -41,18 +48,29 @@ impl App for GitHubApp {
         }
         Ok(Arc::new(GitHubInstance {
             state: Arc::new(state),
+            slot: self.slot.clone(),
         }))
+    }
+
+    fn ingress_routes(&self, _services: &AppServices) -> Option<axum::Router> {
+        Some(crate::routes::ingress_router(self.slot.clone()))
     }
 }
 
 struct GitHubInstance {
     state: Arc<AppState>,
+    slot: StateSlot<AppState>,
 }
 
 #[async_trait]
 impl Instance for GitHubInstance {
     async fn run(&self, cancel: CancellationToken) -> anyhow::Result<()> {
-        crate::run::serve(self.state.clone(), cancel).await
+        // Publish state for the host-mounted ingress router; the guard clears the
+        // slot when this run ends (shutdown or crash). There is no own server —
+        // webhooks are served on the console port — so just hold until cancelled.
+        let _guard = SlotGuard::publish(self.slot.clone(), self.state.clone());
+        cancel.cancelled().await;
+        Ok(())
     }
 
     async fn handle_action(&self, action: &str, params: Value) -> anyhow::Result<String> {

@@ -37,7 +37,7 @@ Apps are pluggable units the console supervises and toggles. **Integrations** br
 [kind-integration]: https://img.shields.io/badge/Integration-2563eb?style=flat-square
 [kind-automation]: https://img.shields.io/badge/Automation-16a34a?style=flat-square
 
-The three integrations each run their own inbound HTTP server on a distinct port (linear `:3000`, github `:3001`, x `:3002`).
+The three integrations are served on the console port under `/webhooks/<app>/` (e.g. `/webhooks/linear/webhook`, `/webhooks/github/webhook`, `/webhooks/x/lark/event`) — no per-app ports.
 
 ## Roadmap
 
@@ -85,7 +85,7 @@ CONSOLE_SECRET=$(openssl rand -hex 32) \
 LINEAR_WEBHOOK_SECRET=your_secret \
 LARK_WEBHOOK_URL=https://open.larksuite.com/open-apis/bot/v2/hook/xxx \
 ./target/release/larkstack-console
-# UI on http://localhost:8080; linear/github/x webhooks on :3000/:3001/:3002
+# UI + API + webhooks all on http://localhost:8080 (webhooks at /webhooks/<app>/)
 # CONSOLE_SECRET (optional) keeps sessions valid across restarts; a key is
 # auto-generated and persisted if unset.
 ```
@@ -100,10 +100,10 @@ See [docs/deploy/console.md](./docs/deploy/console.md) for the full env-var refe
 
 ## Standalone apps
 
-Each app keeps its own `[[bin]]` for local use or a single-purpose deploy, reading config from env vars (`LINEAR_*`, `LARK_*`, `GITHUB_*`, …):
+The automation apps keep their own `[[bin]]` for local/CLI use, reading config from env vars (`LARK_*`, `STANDUP_*`, …). The integrations (linear/github/x) are libraries — run them through the console.
 
 ```bash
-cargo run -p linear      # or github / x / minutes / standup
+cargo run -p standup     # or minutes
 ```
 
 For production, deploy the **console** — one binary, all apps, toggled from the UI. See [docs/deploy/console.md](./docs/deploy/console.md) and [docs/deploy/railway.md](./docs/deploy/railway.md).

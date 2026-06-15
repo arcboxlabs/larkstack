@@ -1,11 +1,15 @@
 #!/bin/bash
-# Usage: ./test-webhook.sh <your-linear-webhook-secret>
+# Usage: ./test-webhook.sh <your-LINEAR_WEBHOOK_SECRET>
+# Override the target with BASE_URL (default: the local console on :8080).
+#   BASE_URL=https://console.example.com ./test-webhook.sh <secret>
 
-ENDPOINT="https://linear-lark-bridge-production.up.railway.app/webhook"
+BASE_URL="${BASE_URL:-http://localhost:8080}"
+ENDPOINT="$BASE_URL/webhooks/linear/webhook"
+LARK_EVENT_ENDPOINT="$BASE_URL/webhooks/linear/lark/event"
 SECRET="${1:?Usage: ./test-webhook.sh <your-LINEAR_WEBHOOK_SECRET>}"
 
 echo "=== 1. Health check ==="
-curl -s https://linear-lark-bridge-production.up.railway.app/health
+curl -s "$BASE_URL/api/health"
 echo -e "\n"
 
 echo "=== 2. Missing signature → expect 401 ==="
@@ -74,11 +78,10 @@ curl -s -o /dev/null -w "HTTP Status: %{http_code}\n" \
 echo ""
 
 echo "=== 9. Lark challenge verification → expect 200 + challenge echo ==="
-LARK_EVENT_ENDPOINT="https://linear-lark-bridge-production.up.railway.app/lark/event"
 curl -s -w "\nHTTP Status: %{http_code}\n" \
   -X POST "$LARK_EVENT_ENDPOINT" \
   -H "Content-Type: application/json" \
   -d '{"type":"url_verification","challenge":"test-challenge-token-123"}'
 echo ""
 
-echo "=== Done. Check Railway logs and your Lark group. ==="
+echo "=== Done. Check the console event stream and your Lark group. ==="

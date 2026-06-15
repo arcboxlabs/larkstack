@@ -13,17 +13,17 @@ built from the workspace-root `Dockerfile`.
    Lark-OAuth binding and app credentials can also be set from the Config /
    Lark Apps tabs. Register `<your-public-url>/auth/callback` as a redirect URI
    in the Lark app.
-4. Railway detects the `Dockerfile` and builds on push. The admin UI + API serve on `$CONSOLE_PORT` (default `8080`).
-5. Enable the apps you want from the UI; each inbound integration serves its webhook on its
-   own port (`[linear.server] 3000`, `[github.server] 3001`, `[x.server] 3002`) — expose the
-   ones you need and point Linear/GitHub/Lark at the matching public URL
-   (`/webhook`, `/github/webhook`, `/lark/event`).
+4. Railway detects the `Dockerfile` and builds on push. The admin UI, API, and every
+   integration's webhooks serve on `$CONSOLE_PORT` (default `8080`).
+5. Enable the apps you want from the UI, then point Linear/GitHub/Lark at the public
+   webhook URL under `/webhooks/<app>/` — `/webhooks/linear/webhook`,
+   `/webhooks/github/webhook`, `/webhooks/x/lark/event`.
 
 ## Manual Docker build
 
 ```bash
 docker build -t larkstack-console .
-docker run -p 8080:8080 -p 3000:3000 \
+docker run -p 8080:8080 \
   -e CONSOLE_SECRET=$(openssl rand -hex 32) \
   -v larkstack-data:/data \
   larkstack-console
@@ -31,6 +31,5 @@ docker run -p 8080:8080 -p 3000:3000 \
 
 `docker compose up -d` does the same via [`docker-compose.yml`](../../docker-compose.yml).
 
-> Need just one integration? Each app keeps a `[[bin]]` (`cargo run -p github`) and
-> reads `GITHUB_*` / `LARK_*` from the environment — package it yourself if you want a
-> single-purpose image.
+> The integration apps (linear/github/x) are libraries with no standalone binary — they
+> run inside the console. Only the automations (`minutes`/`standup`) keep a `[[bin]]`.

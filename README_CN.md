@@ -37,7 +37,7 @@ App 是控制台监管和开关的可插拔单元。**Integration** 把外部系
 [kind-integration]: https://img.shields.io/badge/Integration-2563eb?style=flat-square
 [kind-automation]: https://img.shields.io/badge/Automation-16a34a?style=flat-square
 
-三个 integration 各自运行独立的入站 HTTP 服务，端口互不相同（linear `:3000`、github `:3001`、x `:3002`）。
+三个 integration 都挂在控制台端口下的 `/webhooks/<app>/`（如 `/webhooks/linear/webhook`、`/webhooks/github/webhook`、`/webhooks/x/lark/event`）——不再有独立端口。
 
 ## 路线图
 
@@ -83,7 +83,7 @@ CONSOLE_SECRET=$(openssl rand -hex 32) \
 LINEAR_WEBHOOK_SECRET=your_secret \
 LARK_WEBHOOK_URL=https://open.larksuite.com/open-apis/bot/v2/hook/xxx \
 ./target/release/larkstack-console
-# UI 在 http://localhost:8080；linear/github/x 的 webhook 在 :3000/:3001/:3002
+# UI + API + webhook 都在 http://localhost:8080（webhook 路径为 /webhooks/<app>/）
 # CONSOLE_SECRET（可选）让会话在重启后保持有效；未设置时自动生成并持久化一个密钥。
 ```
 
@@ -97,10 +97,10 @@ docker compose up -d
 
 ## 独立运行单个 app
 
-每个 app 仍保留独立 `[[bin]]`，可用于本地或单一用途部署（从环境变量读取 `LINEAR_*`、`LARK_*`、`GITHUB_*` …）：
+automation 类 app（minutes/standup）保留独立 `[[bin]]`，可用于本地/CLI（从环境变量读取 `LARK_*`、`STANDUP_*` …）。integration（linear/github/x）是库，统一通过控制台运行。
 
 ```bash
-cargo run -p linear      # 或 github / x / minutes / standup
+cargo run -p standup     # 或 minutes
 ```
 
 生产环境请部署**控制台**——一个二进制、所有 app、从 UI 切换开关。见 [docs/deploy/console.md](./docs/deploy/console.md) 与 [docs/deploy/railway.md](./docs/deploy/railway.md)。

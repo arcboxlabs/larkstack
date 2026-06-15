@@ -150,9 +150,15 @@ impl Modify for SessionScheme {
 /// OpenAPI spec + Scalar docs, and the embedded SPA fallback.
 ///
 /// `app_routers` are per-App admin routers (each self-stated); they are mounted
-/// at `/api/apps/<name>/` and inherit the same session gate. App routes are not
-/// part of the OpenAPI spec.
-pub(crate) fn build(state: HostState, app_routers: Vec<(String, Router)>) -> Router {
+/// at `/api/apps/<name>/` and inherit the same session gate. `ingress_routers`
+/// are per-App public webhook routers, mounted at `/webhooks/<name>/` *outside*
+/// the gate (callers authenticate with their own HMAC/token). Neither is part of
+/// the OpenAPI spec.
+pub(crate) fn build(
+    state: HostState,
+    app_routers: Vec<(String, Router)>,
+    ingress_routers: Vec<(String, Router)>,
+) -> Router {
     let gate = axum::middleware::from_fn_with_state(state.clone(), oauth::require_session);
 
     // `/api/*` — session-gated, except `/api/health` (added after `route_layer`).
@@ -191,7 +197,7 @@ pub(crate) fn build(state: HostState, app_routers: Vec<(String, Router)>) -> Rou
     let spec_json = spec.to_pretty_json().expect("OpenAPI spec serializes");
     let docs: Router<HostState> = Scalar::with_url("/api/docs", spec).into();
 
-    router
+    let mut router = router
         .route(
             "/api/openapi.json",
             get(move || {
@@ -199,7 +205,14 @@ pub(crate) fn build(state: HostState, app_routers: Vec<(String, Router)>) -> Rou
                 async move { ([(header::CONTENT_TYPE, "application/json")], spec) }
             }),
         )
-        .merge(docs)
-        .fallback(crate::assets::serve)
-        .with_state(state)
+        .merge(docs);
+
+    // `/webhooks/<name>/*` — public inbound (webhooks, Lark event callbacks),
+    // peer to `/api` and never under `route_layer(gate)`, so the session gate
+    // doesn't touch them; each app authenticates its own callers.
+    for (name, ingress) in ingress_routers {
+        router = router.nest_service(&format!("/webhooks/{name}"), ingress);
+    }
+
+    router.fallback(crate::assets::serve).with_state(state)
 }

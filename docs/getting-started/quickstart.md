@@ -6,25 +6,26 @@
 - A [Linear](https://linear.app/) workspace with webhook access
 - A [Lark](https://larksuite.com/) group chat with a custom bot
 
-## 1. Clone and run
+## 1. Clone and run the console
 
 ```bash
 git clone https://github.com/accele-ai/larkstack.git
 cd larkstack
 export LINEAR_WEBHOOK_SECRET=your_secret
 export LARK_WEBHOOK_URL=https://open.larksuite.com/open-apis/bot/v2/hook/xxx
-cargo run -p linear
+cargo run -p console
 ```
 
-The `linear` app's webhook server starts on port 3000 by default. (For all apps
-behind one admin UI, run the console instead — see [Deploy](../deploy/console.md).)
+The console serves the admin UI, the API, and every integration's webhooks on a
+single port — `http://localhost:8080` by default (`CONSOLE_PORT`). Open the UI and
+set `[linear].enabled = true` (Config tab) to start the Linear integration.
 
-## 2. Expose your local server
+## 2. Expose your local console
 
 Use ngrok (or any tunnel) so Linear and Lark can reach you:
 
 ```bash
-ngrok http 3000
+ngrok http 8080
 ```
 
 ## 3. Configure Linear
@@ -32,7 +33,7 @@ ngrok http 3000
 In your Linear workspace settings, create a webhook pointing at:
 
 ```
-https://<YOUR_NGROK_URL>/webhook
+https://<YOUR_NGROK_URL>/webhooks/linear/webhook
 ```
 
 Enable the event types you care about (Issue, Comment).

@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use lark_kit::{LarkBotClient, LarkConfig, ServerConfig, TomlLark};
+use lark_kit::{LarkBotClient, LarkConfig, TomlLark};
 use larkstack_core::LarkRegistry;
 use reqwest::Client;
 use serde::Deserialize;
@@ -35,7 +35,8 @@ impl Default for GitHubConfig {
 }
 
 impl GitHubConfig {
-    /// Loads from `GITHUB_*` env vars (webhook secret empty when unset).
+    /// Loads from `GITHUB_*` env vars (webhook secret empty when unset). Used as
+    /// the base that the `[github]` TOML section overlays.
     pub fn from_env() -> Self {
         Self {
             webhook_secret: std::env::var("GITHUB_WEBHOOK_SECRET").unwrap_or_default(),
@@ -55,11 +56,11 @@ impl GitHubConfig {
     }
 }
 
-/// Shared application state, wrapped in `Arc` and passed to every handler.
+/// Shared application state, wrapped in `Arc` and published into the ingress
+/// router's [`lark_kit::StateSlot`] while the app runs.
 pub struct AppState {
     pub github: GitHubConfig,
     pub lark: LarkConfig,
-    pub server: ServerConfig,
     pub http: Client,
     pub bot: Option<LarkBotClient>,
 }
@@ -82,24 +83,9 @@ struct Section {
     repo_whitelist: Option<Vec<String>>,
     #[serde(default)]
     lark: TomlLark,
-    #[serde(default)]
-    server: TomlServer,
-}
-
-#[derive(Debug, Deserialize, Default)]
-struct TomlServer {
-    port: Option<u16>,
 }
 
 impl AppState {
-    pub fn from_env() -> Self {
-        Self::from_parts(
-            GitHubConfig::from_env(),
-            LarkConfig::from_env().expect("invalid lark config"),
-            ServerConfig::from_env().expect("invalid server config"),
-        )
-    }
-
     /// Build state from a full config TOML containing a `[github]` section.
     pub fn from_toml(full_toml: &str) -> Result<Self, Box<figment::Error>> {
         let top: TopLevel =
@@ -117,11 +103,6 @@ impl AppState {
         }
         lark.overlay(section.lark);
 
-        let mut server = ServerConfig::from_env().unwrap_or_default();
-        if let Some(p) = section.server.port {
-            server.port = p;
-        }
-
         let mut github = GitHubConfig::from_env();
         if let Some(v) = section.webhook_secret {
             github.webhook_secret = v;
@@ -136,10 +117,10 @@ impl AppState {
             github.repo_whitelist = v;
         }
 
-        Ok(Self::from_parts(github, lark, server))
+        Ok(Self::from_parts(github, lark))
     }
 
-    fn from_parts(github: GitHubConfig, lark: LarkConfig, server: ServerConfig) -> Self {
+    fn from_parts(github: GitHubConfig, lark: LarkConfig) -> Self {
         let http = Client::new();
         let bot = lark.bot_client(&http);
         if !github.repo_whitelist.is_empty() {
@@ -148,7 +129,6 @@ impl AppState {
         Self {
             github,
             lark,
-            server,
             http,
             bot,
         }

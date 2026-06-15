@@ -1340,7 +1340,6 @@ dependencies = [
  "tokio-util",
  "toml",
  "tracing",
- "tracing-subscriber",
 ]
 
 [[package]]
@@ -1872,6 +1871,7 @@ version = "0.1.0"
 dependencies = [
  "aes",
  "anyhow",
+ "arc-swap",
  "axum",
  "base64",
  "cbc",
@@ -2101,7 +2101,6 @@ dependencies = [
  "tokio-util",
  "toml",
  "tracing",
- "tracing-subscriber",
 ]
 
 [[package]]
@@ -5090,7 +5089,6 @@ dependencies = [
  "tokio-util",
  "toml",
  "tracing",
- "tracing-subscriber",
 ]
 
 [[package]]

@@ -14,8 +14,10 @@ platform dashboard.
 | `LARK_APP_SECRET` | No | Bot app secret — pair with `LARK_APP_ID` |
 | `LINEAR_API_KEY` | No | GraphQL API access — enables link previews |
 | `LARK_VERIFICATION_TOKEN` | No | Lark event callback verification |
-| `PORT` | No | Listen port, defaults to `3000` |
-| `DEBOUNCE_DELAY_MS` | No | Debounce window in ms, defaults to `5000` |
+
+The issue-update coalescing window is no longer an env var — set
+`[linear].debounce_delay_ms` (default `5000`) in `config.toml` instead. The
+console serves the integration on one port; there is no per-app listen port.
 
 ## Feature tiers
 

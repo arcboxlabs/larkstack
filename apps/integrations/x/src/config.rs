@@ -1,13 +1,13 @@
-use lark_kit::{LarkConfig, ServerConfig, TomlLark};
+use lark_kit::{LarkConfig, TomlLark};
 use larkstack_core::LarkRegistry;
 use serde::Deserialize;
 
 use crate::source::XClient;
 
-/// Shared application state, wrapped in `Arc` and passed to every handler.
+/// Shared application state, wrapped in `Arc` and published into the ingress
+/// router's [`lark_kit::StateSlot`] while the app runs.
 pub struct AppState {
     pub lark: LarkConfig,
-    pub server: ServerConfig,
     pub x: XClient,
 }
 
@@ -25,23 +25,9 @@ struct Section {
     lark_app: Option<String>,
     #[serde(default)]
     lark: TomlLark,
-    #[serde(default)]
-    server: TomlServer,
-}
-
-#[derive(Debug, Deserialize, Default)]
-struct TomlServer {
-    port: Option<u16>,
 }
 
 impl AppState {
-    pub fn from_env() -> Self {
-        Self::from_parts(
-            LarkConfig::from_env().expect("invalid lark config"),
-            ServerConfig::from_env().expect("invalid server config"),
-        )
-    }
-
     /// Build state from a full config TOML containing an `[x]` section.
     pub fn from_toml(full_toml: &str) -> Result<Self, Box<figment::Error>> {
         let top: TopLevel =
@@ -59,17 +45,12 @@ impl AppState {
         }
         lark.overlay(section.lark);
 
-        let mut server = ServerConfig::from_env().unwrap_or_default();
-        if let Some(p) = section.server.port {
-            server.port = p;
-        }
-
-        Ok(Self::from_parts(lark, server))
+        Ok(Self::from_parts(lark))
     }
 
-    fn from_parts(lark: LarkConfig, server: ServerConfig) -> Self {
+    fn from_parts(lark: LarkConfig) -> Self {
         let http = reqwest::Client::new();
         let x = XClient::new(std::env::var("X_BEARER_TOKEN").ok(), http);
-        Self { lark, server, x }
+        Self { lark, x }
     }
 }

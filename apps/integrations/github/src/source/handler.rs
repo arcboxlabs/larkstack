@@ -6,9 +6,9 @@ use std::sync::Arc;
 
 use axum::{
     body::Bytes,
-    extract::State,
     http::{HeaderMap, StatusCode},
 };
+use lark_kit::Live;
 use lark_kit::card::{LarkCard, LarkMessage};
 use octocrab::models::webhook_events::{
     WebhookEvent, WebhookEventPayload,
@@ -98,7 +98,7 @@ async fn dm(state: &AppState, email: &str, card: &LarkCard) {
 
 /// Handles incoming GitHub webhook requests.
 pub async fn webhook_handler(
-    State(state): State<Arc<AppState>>,
+    Live(state): Live<AppState>,
     headers: HeaderMap,
     body: Bytes,
 ) -> StatusCode {
