@@ -16,6 +16,7 @@ tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
 larkstack = { path = "../larkstack" }
 linear = { path = "../../apps/integrations/linear" }
 github = { path = "../../apps/integrations/github" }
+gitlab = { path = "../../apps/integrations/gitlab" }
 x = { path = "../../apps/integrations/x" }
 minutes = { path = "../../apps/automations/minutes" }
 standup = { path = "../../apps/automations/standup" }

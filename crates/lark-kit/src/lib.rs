@@ -18,5 +18,5 @@ mod webhook;
 pub use bot::LarkBotClient;
 pub use config::{LarkConfig, TomlLark};
 pub use slot::{Live, SlotGuard, StateSlot, slot};
-pub use utils::{truncate, verify_hmac_sha256};
+pub use utils::{truncate, verify_hmac_sha256, verify_standard_webhook};
 pub use webhook::send_lark_card;

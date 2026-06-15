@@ -1,0 +1,81 @@
+use std::sync::Arc;
+
+use async_trait::async_trait;
+use lark_kit::{SlotGuard, StateSlot};
+use larkstack_core::{ActionSpec, App, AppServices, Instance, Kind, Manifest};
+use serde_json::Value;
+use tokio_util::sync::CancellationToken;
+
+use crate::config::AppState;
+
+/// The registered App for the console host.
+pub fn app() -> Arc<dyn App> {
+    Arc::new(GitLabApp {
+        slot: lark_kit::slot(),
+    })
+}
+
+struct GitLabApp {
+    /// Live state cell shared by the host-mounted ingress router (read side) and
+    /// each running [`GitLabInstance`] (write side); lives for the app's lifetime.
+    slot: StateSlot<AppState>,
+}
+
+#[async_trait]
+impl App for GitLabApp {
+    fn manifest(&self) -> Manifest {
+        Manifest {
+            name: "gitlab".into(),
+            kind: Kind::Integration,
+            description: "GitLab webhook → Lark notification integration".into(),
+            actions: vec![
+                ActionSpec::new("ping", "Log a pong — liveness check"),
+                ActionSpec::new("test-lark", "Send a test message to the Lark group webhook"),
+            ],
+        }
+    }
+
+    async fn build(
+        &self,
+        config: &str,
+        _services: AppServices,
+    ) -> anyhow::Result<Arc<dyn Instance>> {
+        let state = AppState::from_toml(config).map_err(|e| anyhow::anyhow!("config: {e}"))?;
+        if state.gitlab.webhook_token.is_empty() && state.gitlab.signing_secret.is_none() {
+            anyhow::bail!(
+                "gitlab needs an auth secret: set [gitlab].webhook_token (X-Gitlab-Token) or \
+                 [gitlab].signing_secret (GitLab 19.1+ signing token), or the GITLAB_WEBHOOK_TOKEN \
+                 / GITLAB_SIGNING_SECRET env var"
+            );
+        }
+        Ok(Arc::new(GitLabInstance {
+            state: Arc::new(state),
+            slot: self.slot.clone(),
+        }))
+    }
+
+    fn ingress_routes(&self, _services: &AppServices) -> Option<axum::Router> {
+        Some(crate::routes::ingress_router(self.slot.clone()))
+    }
+}
+
+struct GitLabInstance {
+    state: Arc<AppState>,
+    slot: StateSlot<AppState>,
+}
+
+#[async_trait]
+impl Instance for GitLabInstance {
+    async fn run(&self, cancel: CancellationToken) -> anyhow::Result<()> {
+        // Publish state for the host-mounted ingress router; the guard clears the
+        // slot when this run ends (shutdown or crash). There is no own server —
+        // webhooks are served on the console port — so just hold until cancelled.
+        let _guard = SlotGuard::publish(self.slot.clone(), self.state.clone());
+        cancel.cancelled().await;
+        Ok(())
+    }
+
+    async fn handle_action(&self, action: &str, params: Value) -> anyhow::Result<String> {
+        crate::actions::handle(&self.state, action, params).await
+    }
+}

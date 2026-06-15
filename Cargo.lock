@@ -787,6 +787,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "github",
+ "gitlab",
  "larkstack",
  "linear",
  "minutes",
@@ -1332,6 +1333,28 @@ dependencies = [
  "lark-kit",
  "larkstack-core",
  "octocrab",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tokio",
+ "tokio-util",
+ "toml",
+ "tracing",
+]
+
+[[package]]
+name = "gitlab"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "axum",
+ "base64",
+ "figment",
+ "hmac 0.12.1",
+ "lark-kit",
+ "larkstack-core",
  "reqwest",
  "serde",
  "serde_json",

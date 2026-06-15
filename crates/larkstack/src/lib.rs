@@ -27,12 +27,13 @@ const DEFAULT_CONFIG: &str = r#"# larkstack console config
 #
 # Each app owns a top-level section. `enabled` (default false) toggles whether
 # the host runs it — flip it from the console. Values left empty fall back to
-# the matching environment variable (LINEAR_*, LARK_*, GITHUB_*, X_BEARER_TOKEN,
-# STT_*, DIGEST_*, STANDUP_*), so secrets can stay in the environment.
+# the matching environment variable (LINEAR_*, LARK_*, GITHUB_*, GITLAB_*,
+# X_BEARER_TOKEN, STT_*, DIGEST_*, STANDUP_*), so secrets can stay in the environment.
 #
 # Inbound integrations are served on the console port under /webhooks/<app>/:
 # linear → /webhooks/linear/webhook + /webhooks/linear/lark/event, github →
-# /webhooks/github/webhook, x → /webhooks/x/lark/event. No per-app ports.
+# /webhooks/github/webhook, gitlab → /webhooks/gitlab/webhook, x →
+# /webhooks/x/lark/event. No per-app ports.
 #
 # Lark credentials live in a shared registry. Register them here, or onboard
 # them from the console's "Lark Apps" tab (which live-tests them). An app then
@@ -73,6 +74,18 @@ enabled = false
 # alert_labels = ["bug", "urgent", "p0"]       # issue labels that post an alert card
 # repo_whitelist = ["repo-a", "repo-b"]        # empty = accept all repos
 [github.lark]
+# webhook_url = ""
+# base_url = "https://open.larksuite.com"
+
+[gitlab]
+enabled = false
+# lark_app = "main"
+# webhook_token = ""           # X-Gitlab-Token plaintext secret (POST /webhooks/gitlab/webhook)
+# signing_secret = ""          # GitLab 19.1+ Standard Webhooks signing token (whsec_…)
+# user_map = { someuser = "someuser@example.com" }  # GitLab username → Lark email, for MR review DMs
+# alert_labels = ["bug", "urgent", "p0"]            # issue label titles that post an alert card
+# project_whitelist = ["group/project-a"]           # empty = accept all; matches path_with_namespace
+[gitlab.lark]
 # webhook_url = ""
 # base_url = "https://open.larksuite.com"
 

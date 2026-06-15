@@ -7,6 +7,7 @@ async fn main() -> anyhow::Result<()> {
     Larkstack::new()
         .register(linear::app())
         .register(github::app())
+        .register(gitlab::app())
         .register(x::app())
         .register(minutes::app())
         .register(standup::app())
