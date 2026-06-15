@@ -1,17 +1,17 @@
 services:
   larkstack:
     build: .
-    image: larkstack-console:latest
-    container_name: larkstack-console
+    # image: ghcr.io/arcboxlabs/larkstack:latest
+    container_name: larkstack
     restart: unless-stopped
     ports:
       # Admin UI + API + integration webhooks (/webhooks/<app>/) all on one port.
       - "8080:8080"
     environment:
+      RUST_LOG: info
       # Optional: signing key for login sessions (else auto-persisted to the
       # data volume). Sign-in is Lark OAuth, configured under [console].
       # CONSOLE_SECRET: replace-me
-      # RUST_LOG: info
 
       # Subsystem secrets (read by each subsystem's config loader). Anything
       # left unset is configurable from the UI's TOML editor instead.
