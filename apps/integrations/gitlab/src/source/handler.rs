@@ -71,7 +71,7 @@ async fn handle_merge_request(state: &Arc<AppState>, cfg: &Config, body: &[u8]) 
         "merge" => {
             info!("GitLab MR merged: {repo}!{}", a.iid);
             let card = cards::mr_merged(repo, a.iid, &a.title, author, &a.url);
-            deliver_all(state.bot.as_ref(), &dests, &card).await;
+            deliver_all(state.bot.as_deref(), &dests, &card).await;
         }
         "open" | "reopen" => {
             info!("GitLab MR opened: {repo}!{}", a.iid);
@@ -84,7 +84,7 @@ async fn handle_merge_request(state: &Arc<AppState>, cfg: &Config, body: &[u8]) 
                 &a.target_branch,
                 &a.url,
             );
-            deliver_all(state.bot.as_ref(), &dests, &card).await;
+            deliver_all(state.bot.as_deref(), &dests, &card).await;
             // Reviewer/assignee DMs (independent of routing): DM each mapped user directly.
             let targets = if ev.reviewers.is_empty() {
                 &ev.assignees
@@ -94,7 +94,7 @@ async fn handle_merge_request(state: &Arc<AppState>, cfg: &Config, body: &[u8]) 
             let dm_card = cards::mr_review_dm(repo, a.iid, &a.title, author, &a.url);
             for t in targets {
                 if let Some(email) = cfg.lark_email(&t.username) {
-                    deliver(state.bot.as_ref(), &Destination::dm(email), &dm_card).await;
+                    deliver(state.bot.as_deref(), &Destination::dm(email), &dm_card).await;
                 }
             }
         }
@@ -123,7 +123,7 @@ async fn handle_issue(state: &Arc<AppState>, cfg: &Config, body: &[u8]) -> Statu
     info!("GitLab issue labeled alert: {repo}#{} label={label}", a.iid);
     let card = cards::issue_labeled(repo, a.iid, &a.title, label, &ev.user.name, &a.url);
     deliver_all(
-        state.bot.as_ref(),
+        state.bot.as_deref(),
         &cfg.destinations_for(repo, "issue"),
         &card,
     )
@@ -163,7 +163,7 @@ async fn handle_pipeline(state: &Arc<AppState>, cfg: &Config, body: &[u8]) -> St
     info!("GitLab pipeline failed: {repo} ref={}", a.ref_name);
     let card = cards::pipeline_failed(repo, &a.ref_name, &ev.user.name, commit_title, &a.url);
     deliver_all(
-        state.bot.as_ref(),
+        state.bot.as_deref(),
         &cfg.destinations_for(repo, "pipeline"),
         &card,
     )
@@ -196,7 +196,7 @@ async fn handle_note(state: &Arc<AppState>, cfg: &Config, body: &[u8]) -> Status
     info!("GitLab note on {noteable}: {repo}");
     let card = cards::note(repo, &noteable, &ev.user.name, &snippet, &a.url);
     deliver_all(
-        state.bot.as_ref(),
+        state.bot.as_deref(),
         &cfg.destinations_for(repo, "note"),
         &card,
     )
@@ -230,7 +230,7 @@ async fn handle_push(state: &Arc<AppState>, cfg: &Config, body: &[u8]) -> Status
         &ev.commits,
     );
     deliver_all(
-        state.bot.as_ref(),
+        state.bot.as_deref(),
         &cfg.destinations_for(repo, "push"),
         &card,
     )

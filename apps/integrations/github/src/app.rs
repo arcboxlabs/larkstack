@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use lark_kit::{SlotGuard, StateSlot};
+use lark_kit::{LarkBotClient, SlotGuard, StateSlot};
 use larkstack_core::{ActionSpec, App, AppServices, Instance, Kind, Manifest};
 use serde_json::Value;
 use tokio_util::sync::CancellationToken;
@@ -12,6 +12,7 @@ use crate::config::AppState;
 pub fn app() -> Arc<dyn App> {
     Arc::new(GitHubApp {
         slot: lark_kit::slot(),
+        bot_slot: lark_kit::slot(),
     })
 }
 
@@ -19,6 +20,8 @@ struct GitHubApp {
     /// Live state cell shared by the host-mounted ingress router (read side) and
     /// each running [`GitHubInstance`] (write side); lives for the app's lifetime.
     slot: StateSlot<AppState>,
+    /// Live bot cell read by the admin `/chats` route; published by the running instance.
+    bot_slot: StateSlot<LarkBotClient>,
 }
 
 #[async_trait]
@@ -53,12 +56,16 @@ impl App for GitHubApp {
         Ok(Arc::new(GitHubInstance {
             state: Arc::new(state),
             slot: self.slot.clone(),
+            bot_slot: self.bot_slot.clone(),
         }))
     }
 
     /// Console admin routes: GET/PUT the live notification routing config.
     fn routes(&self, services: &AppServices) -> Option<axum::Router> {
-        Some(lark_kit::routing::RoutingApi::new(services.state.clone(), "github").router())
+        Some(
+            lark_kit::routing::RoutingApi::new(services.state.clone(), "github")
+                .router(self.bot_slot.clone()),
+        )
     }
 
     fn ingress_routes(&self, _services: &AppServices) -> Option<axum::Router> {
@@ -69,6 +76,7 @@ impl App for GitHubApp {
 struct GitHubInstance {
     state: Arc<AppState>,
     slot: StateSlot<AppState>,
+    bot_slot: StateSlot<LarkBotClient>,
 }
 
 #[async_trait]
@@ -78,6 +86,12 @@ impl Instance for GitHubInstance {
         // slot when this run ends (shutdown or crash). There is no own server —
         // webhooks are served on the console port — so just hold until cancelled.
         let _guard = SlotGuard::publish(self.slot.clone(), self.state.clone());
+        // Publish the bot for the admin `/chats` route, when one is configured.
+        let _bot_guard = self
+            .state
+            .bot
+            .clone()
+            .map(|bot| SlotGuard::publish(self.bot_slot.clone(), bot));
         cancel.cancelled().await;
         Ok(())
     }

@@ -26,6 +26,10 @@ interface RoutingConfig {
   user_map: UserMap[];
   alert_labels: string[];
 }
+interface Chat {
+  chat_id: string;
+  name: string;
+}
 
 // ── Editable shape: rows carry a stable client key (avoids index keys) and
 //    alert_labels is edited as a CSV string. ──────────────────────────────────
@@ -66,6 +70,12 @@ export interface RoutingEditorProps {
 export function RoutingEditor({ appName, eventOptions }: RoutingEditorProps) {
   const url = `/api/apps/${appName}/routing`;
   const { data, error, mutate } = useSWR<RoutingConfig>(url);
+  // The bot's chats power the chat-picker; absent (503) when the app is stopped
+  // or has no bot — the chat fields then fall back to manual chat_id entry.
+  const chatsListId = `chats-${appName}`;
+  const { data: chats } = useSWR<Chat[]>(`/api/apps/${appName}/chats`, {
+    shouldRetryOnError: false,
+  });
   const [edit, setEdit] = useState<EditState | null>(null);
   const [feedback, setFeedback] = useState<Feedback>(null);
   const keyer = useRef(0);
@@ -140,6 +150,15 @@ export function RoutingEditor({ appName, eventOptions }: RoutingEditorProps) {
         email). Changes apply live — no restart. Delivery needs a bound{" "}
         <code>lark_app</code> bot.
       </p>
+      {chats && chats.length > 0 && (
+        <datalist id={chatsListId}>
+          {chats.map((c) => (
+            <option key={c.chat_id} value={c.chat_id}>
+              {c.name}
+            </option>
+          ))}
+        </datalist>
+      )}
 
       {/* ── Rules ── */}
       <div className="actions-subsystem">routing rules</div>
@@ -203,6 +222,7 @@ export function RoutingEditor({ appName, eventOptions }: RoutingEditorProps) {
 
           <DestinationList
             dests={rule.destinations}
+            chatsListId={chatsListId}
             onChange={(ds) =>
               setEdit((s) =>
                 patchRule(s, rule.key, (r) => ({ ...r, destinations: ds })),
@@ -265,6 +285,7 @@ export function RoutingEditor({ appName, eventOptions }: RoutingEditorProps) {
       </div>
       <DestinationList
         dests={edit.default_destinations}
+        chatsListId={chatsListId}
         onChange={(ds) =>
           setEdit((s) => (s ? { ...s, default_destinations: ds } : s))
         }
@@ -378,10 +399,12 @@ export function RoutingEditor({ appName, eventOptions }: RoutingEditorProps) {
 
 function DestinationList({
   dests,
+  chatsListId,
   onChange,
   onAdd,
 }: {
   dests: DestRow[];
+  chatsListId: string;
   onChange: (ds: DestRow[]) => void;
   onAdd: () => void;
 }) {
@@ -409,6 +432,7 @@ function DestinationList({
           </select>
           <input
             className="field-input"
+            list={d.kind === "chat" ? chatsListId : undefined}
             placeholder={d.kind === "chat" ? "chat_id (oc_…)" : "user@email"}
             value={d.target}
             onChange={(e) =>

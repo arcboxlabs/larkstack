@@ -37,7 +37,7 @@ impl GitLabConfig {
 /// loads the live routing config per webhook).
 pub struct AppState {
     pub gitlab: GitLabConfig,
-    pub bot: Option<LarkBotClient>,
+    pub bot: Option<Arc<LarkBotClient>>,
     pub store: Arc<dyn StateStore>,
 }
 
@@ -90,7 +90,7 @@ impl AppState {
         }
 
         let http = Client::new();
-        let bot = lark.bot_client(&http);
+        let bot = lark.bot_client(&http).map(Arc::new);
         Ok(Self { gitlab, bot, store })
     }
 }

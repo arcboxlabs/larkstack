@@ -180,7 +180,7 @@ async fn handle_pull_request(
                 pr.deletions.unwrap_or(0),
                 &html_url,
             );
-            deliver_all(state.bot.as_ref(), &dests, &card).await;
+            deliver_all(state.bot.as_deref(), &dests, &card).await;
             StatusCode::OK
         }
         PullRequestWebhookEventAction::ReviewRequested => {
@@ -200,10 +200,10 @@ async fn handle_pull_request(
                 reviewer_lark_id,
                 &html_url,
             );
-            deliver_all(state.bot.as_ref(), &dests, &card).await;
+            deliver_all(state.bot.as_deref(), &dests, &card).await;
             if let Some(email) = reviewer_lark_id {
                 let dm = cards::pr_review_dm(repo, number, &title, &author, &html_url);
-                deliver(state.bot.as_ref(), &Destination::dm(email), &dm).await;
+                deliver(state.bot.as_deref(), &Destination::dm(email), &dm).await;
             }
             StatusCode::OK
         }
@@ -215,7 +215,7 @@ async fn handle_pull_request(
                 .unwrap_or_else(|| author.clone());
             info!("GitHub PR merged: {repo}#{number} by {merged_by}");
             let card = cards::pr_merged(repo, number, &title, &author, &merged_by, &html_url);
-            deliver_all(state.bot.as_ref(), &dests, &card).await;
+            deliver_all(state.bot.as_deref(), &dests, &card).await;
             StatusCode::OK
         }
         _ => {
@@ -256,7 +256,7 @@ async fn handle_issues(
         issue.html_url.as_ref(),
     );
     deliver_all(
-        state.bot.as_ref(),
+        state.bot.as_deref(),
         &cfg.destinations_for(repo, "issues"),
         &card,
     )
@@ -298,7 +298,7 @@ async fn handle_workflow_run(
         &run.html_url,
     );
     deliver_all(
-        state.bot.as_ref(),
+        state.bot.as_deref(),
         &cfg.destinations_for(repo, "workflow_run"),
         &card,
     )
@@ -330,7 +330,7 @@ async fn handle_secret_scanning(
     info!("GitHub secret scanning alert: {repo} type={secret_type}");
     let card = cards::secret_scanning(repo, secret_type, &alert.html_url);
     deliver_all(
-        state.bot.as_ref(),
+        state.bot.as_deref(),
         &cfg.destinations_for(repo, "secret_scanning"),
         &card,
     )
@@ -374,7 +374,7 @@ async fn handle_dependabot(
     info!("GitHub dependabot alert: {repo} pkg={package} severity={severity}");
     let card = cards::dependabot(repo, package, &severity, summary, &alert.html_url);
     deliver_all(
-        state.bot.as_ref(),
+        state.bot.as_deref(),
         &cfg.destinations_for(repo, "dependabot"),
         &card,
     )

@@ -1409,7 +1409,7 @@ checksum = "aa0141e66c8d0302f8a586df12ad5d0cf87c0fa8c391f2f5b5dc296312dce569"
 dependencies = [
  "graphql-introspection-query",
  "graphql-parser",
- "heck 0.5.0",
+ "heck 0.4.1",
  "proc-macro2",
  "quote",
  "serde",
@@ -1901,7 +1901,7 @@ dependencies = [
  "figment",
  "hex",
  "hmac 0.12.1",
- "larkoapi 0.5.0",
+ "larkoapi 0.5.1",
  "larkstack-core",
  "reqwest",
  "serde",
@@ -1934,9 +1934,9 @@ dependencies = [
 
 [[package]]
 name = "larkoapi"
-version = "0.5.0"
+version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0b90e9b41fabb9c8700ab5cd6186cce9648bbd7d2d4fa6103c80729ffeebfce6"
+checksum = "dff1e192e5571f807ca5e589977f81efb56b28254e40aaf77156a4b248042224"
 dependencies = [
  "async-trait",
  "base64",
@@ -2260,7 +2260,7 @@ dependencies = [
  "figment",
  "futures-util",
  "hound",
- "larkoapi 0.5.0",
+ "larkoapi 0.5.1",
  "larkstack-core",
  "reqwest",
  "serde",
@@ -2705,8 +2705,8 @@ version = "0.13.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "be769465445e8c1474e9c5dac2018218498557af32d9ed057325ec9a41ae81bf"
 dependencies = [
- "heck 0.5.0",
- "itertools 0.14.0",
+ "heck 0.4.1",
+ "itertools 0.13.0",
  "log",
  "multimap",
  "once_cell",
@@ -2726,7 +2726,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8a56d757972c98b346a9b766e3f02746cde6dd1cd1d1d563472929fdd74bec4d"
 dependencies = [
  "anyhow",
- "itertools 0.14.0",
+ "itertools 0.13.0",
  "proc-macro2",
  "quote",
  "syn 2.0.117",
@@ -3608,7 +3608,7 @@ version = "0.8.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c1c97747dbf44bb1ca44a561ece23508e99cb592e862f22222dcf42f51d1e451"
 dependencies = [
- "heck 0.5.0",
+ "heck 0.4.1",
  "proc-macro2",
  "quote",
  "syn 2.0.117",

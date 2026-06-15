@@ -16,7 +16,7 @@ tracing = { workspace = true }
 anyhow = { workspace = true }
 figment = { workspace = true }
 tokio-util = "0.7"
-larkoapi = "0.5"
+larkoapi = "0.5.1"
 larkstack-core = { path = "../larkstack-core" }
 hmac = "0.12"
 sha2 = "0.10"
