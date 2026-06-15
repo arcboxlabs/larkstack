@@ -30,7 +30,10 @@ impl App for GitLabApp {
             description: "GitLab webhook → Lark notification integration".into(),
             actions: vec![
                 ActionSpec::new("ping", "Log a pong — liveness check"),
-                ActionSpec::new("test-lark", "Send a test message to the Lark group webhook"),
+                ActionSpec::new("test-notify", "Send a test card to a chat_id or DM email")
+                    .with_params(
+                        serde_json::json!({ "kind": "chat|dm", "target": "chat_id or email" }),
+                    ),
             ],
         }
     }
@@ -38,9 +41,10 @@ impl App for GitLabApp {
     async fn build(
         &self,
         config: &str,
-        _services: AppServices,
+        services: AppServices,
     ) -> anyhow::Result<Arc<dyn Instance>> {
-        let state = AppState::from_toml(config).map_err(|e| anyhow::anyhow!("config: {e}"))?;
+        let state = AppState::from_toml(config, services.state)
+            .map_err(|e| anyhow::anyhow!("config: {e}"))?;
         if state.gitlab.webhook_token.is_empty() && state.gitlab.signing_secret.is_none() {
             anyhow::bail!(
                 "gitlab needs an auth secret: set [gitlab].webhook_token (X-Gitlab-Token) or \
@@ -52,6 +56,11 @@ impl App for GitLabApp {
             state: Arc::new(state),
             slot: self.slot.clone(),
         }))
+    }
+
+    /// Console admin routes: GET/PUT the live notification routing config.
+    fn routes(&self, services: &AppServices) -> Option<axum::Router> {
+        Some(lark_kit::routing::RoutingApi::new(services.state.clone(), "gitlab").router())
     }
 
     fn ingress_routes(&self, _services: &AppServices) -> Option<axum::Router> {

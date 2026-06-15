@@ -35,18 +35,10 @@ pub struct Commit {
     pub url: String,
 }
 
-/// Minimal probe parsed before the full event: the discriminator plus the
-/// project path for the whitelist gate.
+/// Minimal probe parsed before the full event, to dispatch on the discriminator.
 #[derive(Debug, Deserialize)]
-pub struct EventProbe {
+pub struct KindProbe {
     pub object_kind: String,
-    #[serde(default)]
-    pub project: Option<ProbeProject>,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct ProbeProject {
-    pub path_with_namespace: String,
 }
 
 // ---- Merge Request (`object_kind: "merge_request"`) ----

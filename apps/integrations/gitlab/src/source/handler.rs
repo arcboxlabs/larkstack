@@ -1,7 +1,6 @@
-//! Axum handler for `POST /webhooks/gitlab/webhook` — authenticates the request,
-//! filters by project whitelist, dispatches on `object_kind`, and posts Lark cards.
+//! Axum handler for `POST /webhooks/gitlab/webhook` — authenticates the request, dispatches
+//! on `object_kind`, and delivers Lark cards to the console-configured routing destinations.
 
-use std::collections::HashSet;
 use std::sync::Arc;
 
 use axum::{
@@ -9,27 +8,15 @@ use axum::{
     http::{HeaderMap, StatusCode},
 };
 use lark_kit::Live;
-use lark_kit::card::{LarkCard, LarkMessage};
+use lark_kit::routing::{Config, Destination, deliver, deliver_all};
 use tracing::{info, warn};
 
 use super::payload::{
-    EventProbe, IssueEvent, MergeRequestEvent, NoteEvent, PipelineEvent, PushEvent,
+    IssueEvent, KindProbe, MergeRequestEvent, NoteEvent, PipelineEvent, PushEvent,
 };
 use super::verify;
 use crate::cards;
-use crate::config::{AppState, GitLabConfig};
-
-async fn post_group(state: &AppState, card: &LarkMessage) {
-    lark_kit::send_lark_card(&state.http, &state.lark.webhook_url, card).await;
-}
-
-async fn dm(state: &AppState, email: &str, card: &LarkCard) {
-    if let Some(bot) = &state.bot
-        && let Err(e) = bot.send_dm(email, card).await
-    {
-        warn!("failed to DM {email}: {e}");
-    }
-}
+use crate::config::AppState;
 
 /// Handles incoming GitLab webhook requests.
 pub async fn webhook_handler(
@@ -37,39 +24,28 @@ pub async fn webhook_handler(
     headers: HeaderMap,
     body: Bytes,
 ) -> StatusCode {
-    let gitlab = &state.gitlab;
-
-    if !verify::authenticate(&headers, &body, gitlab) {
+    if !verify::authenticate(&headers, &body, &state.gitlab) {
         warn!("GitLab webhook authentication failed");
         return StatusCode::UNAUTHORIZED;
     }
 
-    // Discriminator + project (for the whitelist gate) in one minimal parse.
-    let probe = match serde_json::from_slice::<EventProbe>(&body) {
+    let probe = match serde_json::from_slice::<KindProbe>(&body) {
         Ok(p) => p,
         Err(e) => {
             warn!("invalid GitLab payload: {e}");
             return StatusCode::BAD_REQUEST;
         }
     };
-    let project = probe
-        .project
-        .map(|p| p.path_with_namespace)
-        .unwrap_or_default();
 
-    if !gitlab.project_whitelist.is_empty()
-        && (project.is_empty() || !gitlab.project_whitelist.contains(&project))
-    {
-        info!("ignoring event from non-whitelisted project: {project:?}");
-        return StatusCode::OK;
-    }
+    // Live routing config — loaded per webhook so console edits apply without a restart.
+    let cfg = Config::load(&state.store, "gitlab").await;
 
     match probe.object_kind.as_str() {
-        "merge_request" => handle_merge_request(&state, gitlab, &body).await,
-        "issue" => handle_issue(&state, gitlab, &body).await,
-        "pipeline" => handle_pipeline(&state, &body).await,
-        "note" => handle_note(&state, &body).await,
-        "push" => handle_push(&state, &body).await,
+        "merge_request" => handle_merge_request(&state, &cfg, &body).await,
+        "issue" => handle_issue(&state, &cfg, &body).await,
+        "pipeline" => handle_pipeline(&state, &cfg, &body).await,
+        "note" => handle_note(&state, &cfg, &body).await,
+        "push" => handle_push(&state, &cfg, &body).await,
         other => {
             info!("ignoring GitLab event kind: {other}");
             StatusCode::OK
@@ -77,11 +53,7 @@ pub async fn webhook_handler(
     }
 }
 
-async fn handle_merge_request(
-    state: &Arc<AppState>,
-    gitlab: &GitLabConfig,
-    body: &[u8],
-) -> StatusCode {
+async fn handle_merge_request(state: &Arc<AppState>, cfg: &Config, body: &[u8]) -> StatusCode {
     let ev: MergeRequestEvent = match serde_json::from_slice(body) {
         Ok(e) => e,
         Err(e) => {
@@ -93,45 +65,36 @@ async fn handle_merge_request(
     let a = &ev.object_attributes;
     let author = &ev.user.name;
     let action = a.action.as_deref().unwrap_or("");
+    let dests = cfg.destinations_for(repo, "merge_request");
 
     match action {
         "merge" => {
             info!("GitLab MR merged: {repo}!{}", a.iid);
-            post_group(
-                state,
-                &cards::mr_merged(repo, a.iid, &a.title, author, &a.url),
-            )
-            .await;
+            let card = cards::mr_merged(repo, a.iid, &a.title, author, &a.url);
+            deliver_all(state.bot.as_ref(), &dests, &card).await;
         }
         "open" | "reopen" => {
             info!("GitLab MR opened: {repo}!{}", a.iid);
-            post_group(
-                state,
-                &cards::mr_opened(
-                    repo,
-                    a.iid,
-                    &a.title,
-                    author,
-                    &a.source_branch,
-                    &a.target_branch,
-                    &a.url,
-                ),
-            )
-            .await;
-            // DM each mapped reviewer (or assignee, if no reviewers are set).
+            let card = cards::mr_opened(
+                repo,
+                a.iid,
+                &a.title,
+                author,
+                &a.source_branch,
+                &a.target_branch,
+                &a.url,
+            );
+            deliver_all(state.bot.as_ref(), &dests, &card).await;
+            // Reviewer/assignee DMs (independent of routing): DM each mapped user directly.
             let targets = if ev.reviewers.is_empty() {
                 &ev.assignees
             } else {
                 &ev.reviewers
             };
+            let dm_card = cards::mr_review_dm(repo, a.iid, &a.title, author, &a.url);
             for t in targets {
-                if let Some(email) = gitlab.user_map.get(&t.username) {
-                    dm(
-                        state,
-                        email,
-                        &cards::mr_review_dm(repo, a.iid, &a.title, author, &a.url),
-                    )
-                    .await;
+                if let Some(email) = cfg.lark_email(&t.username) {
+                    deliver(state.bot.as_ref(), &Destination::dm(email), &dm_card).await;
                 }
             }
         }
@@ -143,7 +106,7 @@ async fn handle_merge_request(
     StatusCode::OK
 }
 
-async fn handle_issue(state: &Arc<AppState>, gitlab: &GitLabConfig, body: &[u8]) -> StatusCode {
+async fn handle_issue(state: &Arc<AppState>, cfg: &Config, body: &[u8]) -> StatusCode {
     let ev: IssueEvent = match serde_json::from_slice(body) {
         Ok(e) => e,
         Err(e) => {
@@ -151,35 +114,38 @@ async fn handle_issue(state: &Arc<AppState>, gitlab: &GitLabConfig, body: &[u8])
             return StatusCode::BAD_REQUEST;
         }
     };
-    let Some(label) = newly_added_alert_label(&ev, &gitlab.alert_labels) else {
+    let Some(label) = newly_added_alert_label(&ev, cfg) else {
         info!("ignoring issue event with no newly-added alert label");
         return StatusCode::OK;
     };
     let repo = &ev.project.path_with_namespace;
     let a = &ev.object_attributes;
     info!("GitLab issue labeled alert: {repo}#{} label={label}", a.iid);
-    post_group(
-        state,
-        &cards::issue_labeled(repo, a.iid, &a.title, label, &ev.user.name, &a.url),
+    let card = cards::issue_labeled(repo, a.iid, &a.title, label, &ev.user.name, &a.url);
+    deliver_all(
+        state.bot.as_ref(),
+        &cfg.destinations_for(repo, "issue"),
+        &card,
     )
     .await;
     StatusCode::OK
 }
 
 /// The first label added in this event (present in `changes.current` but not
-/// `changes.previous`) whose lowercased title is in `alert_labels`.
-fn newly_added_alert_label<'a>(ev: &'a IssueEvent, alert_labels: &[String]) -> Option<&'a str> {
+/// `changes.previous`) that is configured as an alert label.
+fn newly_added_alert_label<'a>(ev: &'a IssueEvent, cfg: &Config) -> Option<&'a str> {
     let labels = ev.changes.as_ref()?.labels.as_ref()?;
-    let previous: HashSet<&str> = labels.previous.iter().map(|l| l.title.as_str()).collect();
+    let previous: std::collections::HashSet<&str> =
+        labels.previous.iter().map(|l| l.title.as_str()).collect();
     labels
         .current
         .iter()
         .filter(|l| !previous.contains(l.title.as_str()))
-        .find(|l| alert_labels.contains(&l.title.to_lowercase()))
+        .find(|l| cfg.is_alert_label(&l.title))
         .map(|l| l.title.as_str())
 }
 
-async fn handle_pipeline(state: &Arc<AppState>, body: &[u8]) -> StatusCode {
+async fn handle_pipeline(state: &Arc<AppState>, cfg: &Config, body: &[u8]) -> StatusCode {
     let ev: PipelineEvent = match serde_json::from_slice(body) {
         Ok(e) => e,
         Err(e) => {
@@ -195,15 +161,17 @@ async fn handle_pipeline(state: &Arc<AppState>, body: &[u8]) -> StatusCode {
     let repo = &ev.project.path_with_namespace;
     let commit_title = ev.commit.as_ref().map(|c| c.title.as_str());
     info!("GitLab pipeline failed: {repo} ref={}", a.ref_name);
-    post_group(
-        state,
-        &cards::pipeline_failed(repo, &a.ref_name, &ev.user.name, commit_title, &a.url),
+    let card = cards::pipeline_failed(repo, &a.ref_name, &ev.user.name, commit_title, &a.url);
+    deliver_all(
+        state.bot.as_ref(),
+        &cfg.destinations_for(repo, "pipeline"),
+        &card,
     )
     .await;
     StatusCode::OK
 }
 
-async fn handle_note(state: &Arc<AppState>, body: &[u8]) -> StatusCode {
+async fn handle_note(state: &Arc<AppState>, cfg: &Config, body: &[u8]) -> StatusCode {
     let ev: NoteEvent = match serde_json::from_slice(body) {
         Ok(e) => e,
         Err(e) => {
@@ -226,15 +194,17 @@ async fn handle_note(state: &Arc<AppState>, body: &[u8]) -> StatusCode {
     let repo = &ev.project.path_with_namespace;
     let snippet = lark_kit::truncate(a.note.trim(), 200);
     info!("GitLab note on {noteable}: {repo}");
-    post_group(
-        state,
-        &cards::note(repo, &noteable, &ev.user.name, &snippet, &a.url),
+    let card = cards::note(repo, &noteable, &ev.user.name, &snippet, &a.url);
+    deliver_all(
+        state.bot.as_ref(),
+        &cfg.destinations_for(repo, "note"),
+        &card,
     )
     .await;
     StatusCode::OK
 }
 
-async fn handle_push(state: &Arc<AppState>, body: &[u8]) -> StatusCode {
+async fn handle_push(state: &Arc<AppState>, cfg: &Config, body: &[u8]) -> StatusCode {
     let ev: PushEvent = match serde_json::from_slice(body) {
         Ok(e) => e,
         Err(e) => {
@@ -252,15 +222,17 @@ async fn handle_push(state: &Arc<AppState>, body: &[u8]) -> StatusCode {
         .strip_prefix("refs/heads/")
         .unwrap_or(&ev.ref_name);
     info!("GitLab push: {repo} branch={branch}");
-    post_group(
-        state,
-        &cards::push(
-            repo,
-            branch,
-            &ev.user_username,
-            ev.total_commits_count,
-            &ev.commits,
-        ),
+    let card = cards::push(
+        repo,
+        branch,
+        &ev.user_username,
+        ev.total_commits_count,
+        &ev.commits,
+    );
+    deliver_all(
+        state.bot.as_ref(),
+        &cfg.destinations_for(repo, "push"),
+        &card,
     )
     .await;
     StatusCode::OK

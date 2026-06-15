@@ -1,9 +1,10 @@
 //! GitLab event → Lark card builders.
 //!
-//! `repo` is the project's `path_with_namespace` (e.g. `group/project`), used in
-//! every card header.
+//! `repo` is the project's `path_with_namespace` (e.g. `group/project`), used in every card
+//! header. All builders return a bare [`LarkCard`] — delivery (group chat or DM) is the
+//! caller's concern, via [`lark_kit::routing`].
 
-use lark_kit::card::{LarkCard, LarkMessage, card, link_button, md_div, message};
+use lark_kit::card::{LarkCard, card, link_button, md_div};
 
 pub fn mr_opened(
     repo: &str,
@@ -13,8 +14,8 @@ pub fn mr_opened(
     source_branch: &str,
     target_branch: &str,
     url: &str,
-) -> LarkMessage {
-    message(card(
+) -> LarkCard {
+    card(
         "purple",
         format!("[{repo}] MR Opened !{iid}"),
         vec![
@@ -25,11 +26,11 @@ pub fn mr_opened(
             md_div(&format!("**Author:** {author}")),
             link_button(url, "View in GitLab"),
         ],
-    ))
+    )
 }
 
-pub fn mr_merged(repo: &str, iid: u64, title: &str, author: &str, url: &str) -> LarkMessage {
-    message(card(
+pub fn mr_merged(repo: &str, iid: u64, title: &str, author: &str, url: &str) -> LarkCard {
+    card(
         "green",
         format!("[{repo}] MR Merged !{iid}"),
         vec![
@@ -37,7 +38,7 @@ pub fn mr_merged(repo: &str, iid: u64, title: &str, author: &str, url: &str) -> 
             md_div(&format!("**Author:** {author}")),
             link_button(url, "View in GitLab"),
         ],
-    ))
+    )
 }
 
 /// DM card for a requested reviewer / assignee.
@@ -55,8 +56,8 @@ pub fn mr_review_dm(repo: &str, iid: u64, title: &str, author: &str, url: &str) 
     )
 }
 
-pub fn note(repo: &str, noteable: &str, author: &str, snippet: &str, url: &str) -> LarkMessage {
-    message(card(
+pub fn note(repo: &str, noteable: &str, author: &str, snippet: &str, url: &str) -> LarkCard {
+    card(
         "blue",
         format!("[{repo}] Comment on {noteable}"),
         vec![
@@ -64,7 +65,7 @@ pub fn note(repo: &str, noteable: &str, author: &str, snippet: &str, url: &str) 
             md_div(snippet),
             link_button(url, "View in GitLab"),
         ],
-    ))
+    )
 }
 
 pub fn issue_labeled(
@@ -74,8 +75,8 @@ pub fn issue_labeled(
     label: &str,
     author: &str,
     url: &str,
-) -> LarkMessage {
-    message(card(
+) -> LarkCard {
+    card(
         "red",
         format!("[{repo}] Issue Alert #{iid}"),
         vec![
@@ -83,7 +84,7 @@ pub fn issue_labeled(
             md_div(&format!("**Label:** `{label}`\n**Author:** {author}")),
             link_button(url, "View in GitLab"),
         ],
-    ))
+    )
 }
 
 pub fn pipeline_failed(
@@ -92,7 +93,7 @@ pub fn pipeline_failed(
     author: &str,
     commit_title: Option<&str>,
     url: &str,
-) -> LarkMessage {
+) -> LarkCard {
     let mut elements = vec![md_div(&format!(
         "**Branch:** `{ref_name}`\n**Triggered by:** {author}"
     ))];
@@ -100,7 +101,7 @@ pub fn pipeline_failed(
         elements.push(md_div(&format!("**Commit:** {commit}")));
     }
     elements.push(link_button(url, "View Pipeline"));
-    message(card("red", format!("[{repo}] Pipeline Failed"), elements))
+    card("red", format!("[{repo}] Pipeline Failed"), elements)
 }
 
 pub fn push(
@@ -109,7 +110,7 @@ pub fn push(
     pusher: &str,
     total: u64,
     commits: &[crate::source::payload::Commit],
-) -> LarkMessage {
+) -> LarkCard {
     let plural = if total == 1 { "commit" } else { "commits" };
     let mut elements = vec![md_div(&format!(
         "**Branch:** `{ref_name}`\n**Pushed by:** {pusher} ({total} {plural})"
@@ -122,5 +123,5 @@ pub fn push(
     if !lines.is_empty() {
         elements.push(md_div(&lines.join("\n")));
     }
-    message(card("blue", format!("[{repo}] New Push"), elements))
+    card("blue", format!("[{repo}] New Push"), elements)
 }

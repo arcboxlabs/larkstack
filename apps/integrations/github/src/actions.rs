@@ -1,37 +1,43 @@
-use anyhow::Context;
-use serde_json::{Value, json};
+use anyhow::{anyhow, bail};
+use lark_kit::card::{card, md_div};
+use serde::Deserialize;
+use serde_json::Value;
 
 use crate::config::AppState;
 
 /// Handle one console-dispatched action, returning a human-readable result.
-pub async fn handle(state: &AppState, action: &str, _params: Value) -> anyhow::Result<String> {
+pub async fn handle(state: &AppState, action: &str, params: Value) -> anyhow::Result<String> {
     match action {
         "ping" => Ok("pong".into()),
-        "test-lark" => send_test_message(state).await,
-        other => anyhow::bail!("unknown action '{other}'"),
+        "test-notify" => test_notify(state, params).await,
+        other => bail!("unknown action '{other}'"),
     }
 }
 
-async fn send_test_message(state: &AppState) -> anyhow::Result<String> {
-    if state.lark.webhook_url.is_empty() {
-        anyhow::bail!("lark webhook_url not set");
-    }
-    let body = json!({
-        "msg_type": "text",
-        "content": { "text": "[larkstack-console] github test message" },
-    });
-    let resp = state
-        .http
-        .post(&state.lark.webhook_url)
-        .json(&body)
-        .send()
-        .await
-        .context("send failed")?;
-    let status = resp.status();
-    let text = resp.text().await.unwrap_or_default();
-    if status.is_success() {
-        Ok(format!("sent ({}): {text}", status.as_u16()))
-    } else {
-        anyhow::bail!("{} {text}", status.as_u16())
-    }
+#[derive(Deserialize)]
+struct TestParams {
+    kind: String,
+    target: String,
+}
+
+/// Send a test card to a destination, surfacing the bot's send result.
+async fn test_notify(state: &AppState, params: Value) -> anyhow::Result<String> {
+    let p: TestParams = serde_json::from_value(params)
+        .map_err(|e| anyhow!("params must be {{ kind: \"chat\"|\"dm\", target }}: {e}"))?;
+    let bot = state
+        .bot
+        .as_ref()
+        .ok_or_else(|| anyhow!("no Lark bot configured (bind [github].lark_app)"))?;
+    let test = card(
+        "blue",
+        "[github] Test notification".into(),
+        vec![md_div("If you can read this, routing delivery works.")],
+    );
+    let res = match p.kind.as_str() {
+        "chat" => bot.reply_to_chat(&p.target, &test).await,
+        "dm" => bot.send_dm(&p.target, &test).await,
+        other => bail!("unknown kind '{other}' (expected 'chat' or 'dm')"),
+    };
+    res.map_err(|e| anyhow!("{e}"))?;
+    Ok(format!("sent test to {} {}", p.kind, p.target))
 }

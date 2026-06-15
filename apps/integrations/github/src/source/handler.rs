@@ -1,6 +1,6 @@
-//! Axum handler for `POST /github/webhook` — verifies the signature, filters by
-//! repo whitelist, parses with octocrab's native `WebhookEvent` models, and
-//! posts a Lark card.
+//! Axum handler for `POST /webhooks/github/webhook` — verifies the signature, parses with
+//! octocrab's native `WebhookEvent` models, and delivers Lark cards to the console-configured
+//! routing destinations.
 
 use std::sync::Arc;
 
@@ -9,7 +9,7 @@ use axum::{
     http::{HeaderMap, StatusCode},
 };
 use lark_kit::Live;
-use lark_kit::card::{LarkCard, LarkMessage};
+use lark_kit::routing::{Config, Destination, deliver, deliver_all};
 use octocrab::models::webhook_events::{
     WebhookEvent, WebhookEventPayload,
     payload::{
@@ -20,13 +20,11 @@ use octocrab::models::webhook_events::{
 use tracing::{info, warn};
 
 use super::utils::verify_github_signature;
-use crate::{
-    cards,
-    config::{AppState, GitHubConfig},
-};
+use crate::cards;
+use crate::config::AppState;
 
-/// Pre-parse: extracts `repository.name` (whitelist) and `full_name` (display)
-/// without deserializing the full payload.
+/// Pre-parse: extracts `repository.full_name` (the routing subject + card header) without
+/// deserializing the full payload.
 #[derive(serde::Deserialize)]
 struct RepoProbe {
     repository: RepoName,
@@ -38,8 +36,7 @@ struct RepoName {
     full_name: Option<String>,
 }
 
-/// Inner data for `workflow_run` events — octocrab keeps it as a
-/// `serde_json::Value`, so we deserialize the fields we need manually.
+/// Inner data for `workflow_run` events — octocrab keeps it as a `serde_json::Value`.
 #[derive(serde::Deserialize)]
 struct WorkflowRunData {
     conclusion: Option<String>,
@@ -84,26 +81,12 @@ struct DependabotAdvisory {
     summary: String,
 }
 
-async fn post_group(state: &AppState, card: &LarkMessage) {
-    lark_kit::send_lark_card(&state.http, &state.lark.webhook_url, card).await;
-}
-
-async fn dm(state: &AppState, email: &str, card: &LarkCard) {
-    if let Some(bot) = &state.bot
-        && let Err(e) = bot.send_dm(email, card).await
-    {
-        warn!("failed to DM {email}: {e}");
-    }
-}
-
 /// Handles incoming GitHub webhook requests.
 pub async fn webhook_handler(
     Live(state): Live<AppState>,
     headers: HeaderMap,
     body: Bytes,
 ) -> StatusCode {
-    let github = &state.github;
-
     let Some(signature) = headers
         .get("x-hub-signature-256")
         .and_then(|v| v.to_str().ok())
@@ -111,33 +94,19 @@ pub async fn webhook_handler(
         warn!("missing x-hub-signature-256 header");
         return StatusCode::UNAUTHORIZED;
     };
-    if !verify_github_signature(&github.webhook_secret, &body, signature) {
+    if !verify_github_signature(&state.github.webhook_secret, &body, signature) {
         warn!("invalid GitHub webhook signature");
         return StatusCode::UNAUTHORIZED;
     }
 
-    // Extract repo name (whitelist) and full_name (display) in one pass.
-    let (repo, repo_name) = match serde_json::from_slice::<RepoProbe>(&body) {
-        Ok(probe) => {
-            let full = probe
-                .repository
-                .full_name
-                .clone()
-                .unwrap_or_else(|| probe.repository.name.clone());
-            (full, probe.repository.name)
-        }
+    // `repository.full_name` ("owner/repo") is the routing subject + card header.
+    let repo = match serde_json::from_slice::<RepoProbe>(&body) {
+        Ok(probe) => probe.repository.full_name.unwrap_or(probe.repository.name),
         Err(_) => {
             warn!("could not extract repository name from payload");
-            (String::new(), String::new())
+            String::new()
         }
     };
-
-    if !github.repo_whitelist.is_empty()
-        && (repo_name.is_empty() || !github.repo_whitelist.contains(&repo_name))
-    {
-        info!("ignoring event from non-whitelisted repo: {repo_name:?}");
-        return StatusCode::OK;
-    }
 
     let event_type = headers
         .get("x-github-event")
@@ -152,21 +121,22 @@ pub async fn webhook_handler(
         }
     };
 
+    // Live routing config — loaded per webhook so console edits apply without a restart.
+    let cfg = Config::load(&state.store, "github").await;
+
     match webhook.specific {
         WebhookEventPayload::PullRequest(payload) => {
-            handle_pull_request(&state, github, &repo, *payload).await
+            handle_pull_request(&state, &cfg, &repo, *payload).await
         }
-        WebhookEventPayload::Issues(payload) => {
-            handle_issues(&state, github, &repo, *payload).await
-        }
+        WebhookEventPayload::Issues(payload) => handle_issues(&state, &cfg, &repo, *payload).await,
         WebhookEventPayload::WorkflowRun(payload) => {
-            handle_workflow_run(&state, &repo, *payload).await
+            handle_workflow_run(&state, &cfg, &repo, *payload).await
         }
         WebhookEventPayload::SecretScanningAlert(payload) => {
-            handle_secret_scanning(&state, &repo, *payload).await
+            handle_secret_scanning(&state, &cfg, &repo, *payload).await
         }
         WebhookEventPayload::DependabotAlert(payload) => {
-            handle_dependabot(&state, &repo, *payload).await
+            handle_dependabot(&state, &cfg, &repo, *payload).await
         }
         _ => {
             info!("ignoring GitHub event type: {event_type}");
@@ -177,7 +147,7 @@ pub async fn webhook_handler(
 
 async fn handle_pull_request(
     state: &Arc<AppState>,
-    github: &GitHubConfig,
+    cfg: &Config,
     repo: &str,
     payload: octocrab::models::webhook_events::payload::PullRequestWebhookEventPayload,
 ) -> StatusCode {
@@ -194,25 +164,23 @@ async fn handle_pull_request(
         .as_ref()
         .map(|u| u.to_string())
         .unwrap_or_default();
+    let dests = cfg.destinations_for(repo, "pull_request");
 
     match payload.action {
         PullRequestWebhookEventAction::Opened => {
             info!("GitHub PR opened: {repo}#{number}");
-            post_group(
-                state,
-                &cards::pr_opened(
-                    repo,
-                    number,
-                    &title,
-                    &author,
-                    &pr.head.ref_field,
-                    &pr.base.ref_field,
-                    pr.additions.unwrap_or(0),
-                    pr.deletions.unwrap_or(0),
-                    &html_url,
-                ),
-            )
-            .await;
+            let card = cards::pr_opened(
+                repo,
+                number,
+                &title,
+                &author,
+                &pr.head.ref_field,
+                &pr.base.ref_field,
+                pr.additions.unwrap_or(0),
+                pr.deletions.unwrap_or(0),
+                &html_url,
+            );
+            deliver_all(state.bot.as_ref(), &dests, &card).await;
             StatusCode::OK
         }
         PullRequestWebhookEventAction::ReviewRequested => {
@@ -222,27 +190,20 @@ async fn handle_pull_request(
                 return StatusCode::OK;
             };
             info!("GitHub review requested: {repo}#{number} reviewer={reviewer}");
-            let reviewer_lark_id = github.user_map.get(&reviewer).cloned();
-            post_group(
-                state,
-                &cards::pr_review_requested(
-                    repo,
-                    number,
-                    &title,
-                    &author,
-                    &reviewer,
-                    reviewer_lark_id.as_deref(),
-                    &html_url,
-                ),
-            )
-            .await;
+            let reviewer_lark_id = cfg.lark_email(&reviewer);
+            let card = cards::pr_review_requested(
+                repo,
+                number,
+                &title,
+                &author,
+                &reviewer,
+                reviewer_lark_id,
+                &html_url,
+            );
+            deliver_all(state.bot.as_ref(), &dests, &card).await;
             if let Some(email) = reviewer_lark_id {
-                dm(
-                    state,
-                    &email,
-                    &cards::pr_review_dm(repo, number, &title, &author, &html_url),
-                )
-                .await;
+                let dm = cards::pr_review_dm(repo, number, &title, &author, &html_url);
+                deliver(state.bot.as_ref(), &Destination::dm(email), &dm).await;
             }
             StatusCode::OK
         }
@@ -253,11 +214,8 @@ async fn handle_pull_request(
                 .map(|u| u.login.clone())
                 .unwrap_or_else(|| author.clone());
             info!("GitHub PR merged: {repo}#{number} by {merged_by}");
-            post_group(
-                state,
-                &cards::pr_merged(repo, number, &title, &author, &merged_by, &html_url),
-            )
-            .await;
+            let card = cards::pr_merged(repo, number, &title, &author, &merged_by, &html_url);
+            deliver_all(state.bot.as_ref(), &dests, &card).await;
             StatusCode::OK
         }
         _ => {
@@ -269,7 +227,7 @@ async fn handle_pull_request(
 
 async fn handle_issues(
     state: &Arc<AppState>,
-    github: &GitHubConfig,
+    cfg: &Config,
     repo: &str,
     payload: octocrab::models::webhook_events::payload::IssuesWebhookEventPayload,
 ) -> StatusCode {
@@ -280,7 +238,7 @@ async fn handle_issues(
     let Some(label) = payload.label.as_ref().map(|l| l.name.clone()) else {
         return StatusCode::OK;
     };
-    if !github.alert_labels.contains(&label.to_lowercase()) {
+    if !cfg.is_alert_label(&label) {
         info!("ignoring non-alert label: {label}");
         return StatusCode::OK;
     }
@@ -289,16 +247,18 @@ async fn handle_issues(
         "GitHub issue labeled alert: {repo}#{} label={label}",
         issue.number
     );
-    post_group(
-        state,
-        &cards::issue_labeled(
-            repo,
-            issue.number,
-            &issue.title,
-            &label,
-            &issue.user.login,
-            issue.html_url.as_ref(),
-        ),
+    let card = cards::issue_labeled(
+        repo,
+        issue.number,
+        &issue.title,
+        &label,
+        &issue.user.login,
+        issue.html_url.as_ref(),
+    );
+    deliver_all(
+        state.bot.as_ref(),
+        &cfg.destinations_for(repo, "issues"),
+        &card,
     )
     .await;
     StatusCode::OK
@@ -306,6 +266,7 @@ async fn handle_issues(
 
 async fn handle_workflow_run(
     state: &Arc<AppState>,
+    cfg: &Config,
     repo: &str,
     payload: octocrab::models::webhook_events::payload::WorkflowRunWebhookEventPayload,
 ) -> StatusCode {
@@ -329,15 +290,17 @@ async fn handle_workflow_run(
         "GitHub workflow_run failed: {repo} workflow={} branch={}",
         run.name, run.head_branch
     );
-    post_group(
-        state,
-        &cards::workflow_failed(
-            repo,
-            &run.name,
-            &run.head_branch,
-            &run.actor.login,
-            &run.html_url,
-        ),
+    let card = cards::workflow_failed(
+        repo,
+        &run.name,
+        &run.head_branch,
+        &run.actor.login,
+        &run.html_url,
+    );
+    deliver_all(
+        state.bot.as_ref(),
+        &cfg.destinations_for(repo, "workflow_run"),
+        &card,
     )
     .await;
     StatusCode::OK
@@ -345,6 +308,7 @@ async fn handle_workflow_run(
 
 async fn handle_secret_scanning(
     state: &Arc<AppState>,
+    cfg: &Config,
     repo: &str,
     payload: octocrab::models::webhook_events::payload::SecretScanningAlertWebhookEventPayload,
 ) -> StatusCode {
@@ -364,9 +328,11 @@ async fn handle_secret_scanning(
         .as_deref()
         .unwrap_or(&alert.secret_type);
     info!("GitHub secret scanning alert: {repo} type={secret_type}");
-    post_group(
-        state,
-        &cards::secret_scanning(repo, secret_type, &alert.html_url),
+    let card = cards::secret_scanning(repo, secret_type, &alert.html_url);
+    deliver_all(
+        state.bot.as_ref(),
+        &cfg.destinations_for(repo, "secret_scanning"),
+        &card,
     )
     .await;
     StatusCode::OK
@@ -374,6 +340,7 @@ async fn handle_secret_scanning(
 
 async fn handle_dependabot(
     state: &Arc<AppState>,
+    cfg: &Config,
     repo: &str,
     payload: octocrab::models::webhook_events::payload::DependabotAlertWebhookEventPayload,
 ) -> StatusCode {
@@ -405,9 +372,11 @@ async fn handle_dependabot(
         .map(|a| a.summary.as_str())
         .unwrap_or("No summary available");
     info!("GitHub dependabot alert: {repo} pkg={package} severity={severity}");
-    post_group(
-        state,
-        &cards::dependabot(repo, package, &severity, summary, &alert.html_url),
+    let card = cards::dependabot(repo, package, &severity, summary, &alert.html_url);
+    deliver_all(
+        state.bot.as_ref(),
+        &cfg.destinations_for(repo, "dependabot"),
+        &card,
     )
     .await;
     StatusCode::OK

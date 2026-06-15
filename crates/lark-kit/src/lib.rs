@@ -9,6 +9,7 @@
 pub mod card;
 pub mod config;
 pub mod event;
+pub mod routing;
 pub mod slot;
 pub mod utils;
 

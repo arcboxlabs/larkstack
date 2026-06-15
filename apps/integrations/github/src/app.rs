@@ -30,7 +30,10 @@ impl App for GitHubApp {
             description: "GitHub webhook → Lark notification integration".into(),
             actions: vec![
                 ActionSpec::new("ping", "Log a pong — liveness check"),
-                ActionSpec::new("test-lark", "Send a test message to the Lark group webhook"),
+                ActionSpec::new("test-notify", "Send a test card to a chat_id or DM email")
+                    .with_params(
+                        serde_json::json!({ "kind": "chat|dm", "target": "chat_id or email" }),
+                    ),
             ],
         }
     }
@@ -38,9 +41,10 @@ impl App for GitHubApp {
     async fn build(
         &self,
         config: &str,
-        _services: AppServices,
+        services: AppServices,
     ) -> anyhow::Result<Arc<dyn Instance>> {
-        let state = AppState::from_toml(config).map_err(|e| anyhow::anyhow!("config: {e}"))?;
+        let state = AppState::from_toml(config, services.state)
+            .map_err(|e| anyhow::anyhow!("config: {e}"))?;
         if state.github.webhook_secret.is_empty() {
             anyhow::bail!(
                 "github webhook_secret is required (set [github].webhook_secret or GITHUB_WEBHOOK_SECRET)"
@@ -50,6 +54,11 @@ impl App for GitHubApp {
             state: Arc::new(state),
             slot: self.slot.clone(),
         }))
+    }
+
+    /// Console admin routes: GET/PUT the live notification routing config.
+    fn routes(&self, services: &AppServices) -> Option<axum::Router> {
+        Some(lark_kit::routing::RoutingApi::new(services.state.clone(), "github").router())
     }
 
     fn ingress_routes(&self, _services: &AppServices) -> Option<axum::Router> {

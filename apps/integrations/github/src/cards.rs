@@ -1,6 +1,9 @@
 //! GitHub event → Lark card builders.
+//!
+//! All builders return a bare [`LarkCard`] — delivery (group chat or DM) is the caller's
+//! concern, via [`lark_kit::routing`].
 
-use lark_kit::card::{LarkCard, LarkMessage, card, link_button, md_div, message};
+use lark_kit::card::{LarkCard, card, link_button, md_div};
 
 #[allow(clippy::too_many_arguments)]
 pub fn pr_opened(
@@ -13,8 +16,8 @@ pub fn pr_opened(
     additions: u64,
     deletions: u64,
     url: &str,
-) -> LarkMessage {
-    message(card(
+) -> LarkCard {
+    card(
         "purple",
         format!("[{repo}] PR Opened #{number}"),
         vec![
@@ -25,7 +28,7 @@ pub fn pr_opened(
             md_div(&format!("**Author:** {author}")),
             link_button(url, "View on GitHub"),
         ],
-    ))
+    )
 }
 
 pub fn pr_review_requested(
@@ -36,12 +39,12 @@ pub fn pr_review_requested(
     reviewer: &str,
     reviewer_lark_id: Option<&str>,
     url: &str,
-) -> LarkMessage {
+) -> LarkCard {
     let reviewer_display = match reviewer_lark_id {
         Some(email) => format!("<at email={email}></at>"),
         None => reviewer.to_string(),
     };
-    message(card(
+    card(
         "yellow",
         format!("[{repo}] Review Requested #{number}"),
         vec![
@@ -51,7 +54,7 @@ pub fn pr_review_requested(
             )),
             link_button(url, "View on GitHub"),
         ],
-    ))
+    )
 }
 
 /// DM card for the requested reviewer.
@@ -76,8 +79,8 @@ pub fn pr_merged(
     author: &str,
     merged_by: &str,
     url: &str,
-) -> LarkMessage {
-    message(card(
+) -> LarkCard {
+    card(
         "green",
         format!("[{repo}] PR Merged #{number}"),
         vec![
@@ -85,7 +88,7 @@ pub fn pr_merged(
             md_div(&format!("**Merged by:** {merged_by}\n**Author:** {author}")),
             link_button(url, "View on GitHub"),
         ],
-    ))
+    )
 }
 
 pub fn issue_labeled(
@@ -95,8 +98,8 @@ pub fn issue_labeled(
     label: &str,
     author: &str,
     url: &str,
-) -> LarkMessage {
-    message(card(
+) -> LarkCard {
+    card(
         "red",
         format!("[{repo}] Issue Alert #{number}"),
         vec![
@@ -104,7 +107,7 @@ pub fn issue_labeled(
             md_div(&format!("**Label:** `{label}`\n**Author:** {author}")),
             link_button(url, "View on GitHub"),
         ],
-    ))
+    )
 }
 
 pub fn workflow_failed(
@@ -113,8 +116,8 @@ pub fn workflow_failed(
     branch: &str,
     actor: &str,
     url: &str,
-) -> LarkMessage {
-    message(card(
+) -> LarkCard {
+    card(
         "red",
         format!("[{repo}] CI Failed"),
         vec![
@@ -124,11 +127,11 @@ pub fn workflow_failed(
             )),
             link_button(url, "View Workflow Run"),
         ],
-    ))
+    )
 }
 
-pub fn secret_scanning(repo: &str, secret_type: &str, url: &str) -> LarkMessage {
-    message(card(
+pub fn secret_scanning(repo: &str, secret_type: &str, url: &str) -> LarkCard {
+    card(
         "red",
         format!("[{repo}] Secret Leaked"),
         vec![
@@ -137,22 +140,16 @@ pub fn secret_scanning(repo: &str, secret_type: &str, url: &str) -> LarkMessage 
             )),
             link_button(url, "View Alert"),
         ],
-    ))
+    )
 }
 
-pub fn dependabot(
-    repo: &str,
-    package: &str,
-    severity: &str,
-    summary: &str,
-    url: &str,
-) -> LarkMessage {
+pub fn dependabot(repo: &str, package: &str, severity: &str, summary: &str, url: &str) -> LarkCard {
     let color = if severity == "critical" {
         "red"
     } else {
         "orange"
     };
-    message(card(
+    card(
         color,
         format!("[{repo}] Dependabot Alert"),
         vec![
@@ -162,5 +159,5 @@ pub fn dependabot(
             md_div(summary),
             link_button(url, "View Alert"),
         ],
-    ))
+    )
 }

@@ -5,6 +5,8 @@ import { useMe } from "./lib/auth";
 import { Actions } from "./tabs/Actions";
 import { Config } from "./tabs/Config";
 import { Events } from "./tabs/Events";
+import { GitHub } from "./tabs/GitHub";
+import { Gitlab } from "./tabs/Gitlab";
 import { LarkApps } from "./tabs/LarkApps";
 import { Linear } from "./tabs/Linear";
 import { Setup } from "./tabs/Setup";
@@ -38,6 +40,8 @@ export function App() {
         <Route path="actions" element={<Actions />} />
         <Route path="lark-apps" element={<LarkApps />} />
         <Route path="linear" element={<Linear />} />
+        <Route path="github" element={<GitHub />} />
+        <Route path="gitlab" element={<Gitlab />} />
         <Route path="standup" element={<Standup />} />
         <Route path="config" element={<Config />} />
         <Route path="events" element={<Events />} />

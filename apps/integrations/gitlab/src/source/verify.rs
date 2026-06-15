@@ -70,7 +70,6 @@ mod tests {
         GitLabConfig {
             webhook_token: token.into(),
             signing_secret: signing.map(Into::into),
-            ..Default::default()
         }
     }
 

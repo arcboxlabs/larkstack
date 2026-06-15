@@ -66,27 +66,26 @@ enabled = false
 # verification_token = ""      # token for the link-preview app (POST /webhooks/linear/lark/event)
 # base_url = "https://open.larksuite.com"
 
+# github/gitlab deliver notifications through the bot; routing (repo/project/group →
+# group chat / DM), reviewer user-map and alert labels are configured live from each app's
+# console tab (stored per-App, not here). config.toml carries only secrets + the bot binding.
 [github]
 enabled = false
-# lark_app = "main"
-# webhook_secret = ""          # enables POST /github/webhook (HMAC-verified); unset = won't start
-# user_map = { octocat = "octo@example.com" }  # GitHub login → Lark email, for review DMs
-# alert_labels = ["bug", "urgent", "p0"]       # issue labels that post an alert card
-# repo_whitelist = ["repo-a", "repo-b"]        # empty = accept all repos
+# lark_app = "main"            # binds [lark-apps.<name>] for the notification bot
+# webhook_secret = ""          # HMAC for X-Hub-Signature-256; unset = won't start
 [github.lark]
-# webhook_url = ""
+# app_id = ""                  # bot creds (alternative to lark_app)
+# app_secret = ""
 # base_url = "https://open.larksuite.com"
 
 [gitlab]
 enabled = false
-# lark_app = "main"
+# lark_app = "main"            # binds [lark-apps.<name>] for the notification bot
 # webhook_token = ""           # X-Gitlab-Token plaintext secret (POST /webhooks/gitlab/webhook)
 # signing_secret = ""          # GitLab 19.1+ Standard Webhooks signing token (whsec_…)
-# user_map = { someuser = "someuser@example.com" }  # GitLab username → Lark email, for MR review DMs
-# alert_labels = ["bug", "urgent", "p0"]            # issue label titles that post an alert card
-# project_whitelist = ["group/project-a"]           # empty = accept all; matches path_with_namespace
 [gitlab.lark]
-# webhook_url = ""
+# app_id = ""                  # bot creds (alternative to lark_app)
+# app_secret = ""
 # base_url = "https://open.larksuite.com"
 
 [x]
