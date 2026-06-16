@@ -108,6 +108,35 @@ pub fn resolve(config_toml: &str) -> Option<OAuthConfig> {
     })
 }
 
+/// Every sensitive `user_info` identity field, with the contact scope each one
+/// needs. The console matches its admin allowlist on `email`/`enterprise_email`,
+/// and those fields are only populated when their scope is both granted to the
+/// app *and* requested at authorize time — so we request the full identity set
+/// by default. Every scope here must also be granted on the Lark app's
+/// Permission Management page, or the authorize page fails with error 20027.
+const DEFAULT_USER_INFO_SCOPES: &str = concat!(
+    "contact:user.email:readonly ",       // email
+    "contact:user.employee:readonly ",    // enterprise_email + employee_no
+    "contact:user.employee_id:readonly ", // user_id
+    "contact:user.phone:readonly",        // mobile
+);
+
+/// The `scope` to send to the authorize endpoint. An explicit `[console].scope`
+/// wins verbatim (set it empty to request none); otherwise we default to the
+/// full identity set when an admin allowlist is configured, and to nothing when
+/// it isn't — the open/bootstrap case needs no email and shouldn't force the
+/// operator to grant contact permissions just to sign in.
+fn effective_scope(cfg: &OAuthConfig) -> Option<String> {
+    match cfg.scope.as_deref() {
+        Some(s) => {
+            let s = s.trim();
+            (!s.is_empty()).then(|| s.to_string())
+        }
+        None if !cfg.admins.is_empty() => Some(DEFAULT_USER_INFO_SCOPES.to_string()),
+        None => None,
+    }
+}
+
 /// The callback URL Lark redirects back to. Prefer the explicit config value
 /// (it must match what's registered in the Lark app), else derive from the
 /// request host.
@@ -208,6 +237,7 @@ pub async fn login(
             .build(),
     );
 
+    let scope = effective_scope(&cfg);
     let mut params = vec![
         ("client_id", cfg.app_id.as_str()),
         ("redirect_uri", redirect.as_str()),
@@ -216,7 +246,7 @@ pub async fn login(
         ("code_challenge", challenge.as_str()),
         ("code_challenge_method", "S256"),
     ];
-    if let Some(scope) = cfg.scope.as_deref().filter(|s| !s.is_empty()) {
+    if let Some(scope) = scope.as_deref() {
         params.push(("scope", scope));
     }
     let authorize = format!("{}/open-apis/authen/v1/authorize", cfg.accounts_base);
@@ -304,7 +334,15 @@ pub async fn callback(
 
     let emails = user.emails();
     if !cfg.admins.is_empty() && !emails.iter().any(|e| cfg.admins.contains(e)) {
-        warn!("denied console login for {emails:?} — not in [console].admins");
+        if emails.is_empty() {
+            warn!(
+                "denied console login: Lark returned no email for this account. Grant the app \
+                 contact:user.email:readonly (and contact:user.employee:readonly), and make sure \
+                 the account has an email set — otherwise no email can match [console].admins."
+            );
+        } else {
+            warn!("denied console login for {emails:?} — not in [console].admins");
+        }
         return (
             jar,
             (
@@ -573,6 +611,40 @@ mod tests {
         let o = resolve(cfg).expect("configured");
         assert_eq!(o.open_base, "https://open.feishu.cn");
         assert_eq!(o.accounts_base, "https://accounts.feishu.cn");
+    }
+
+    fn cfg_with(scope: Option<&str>, admins: &[&str]) -> OAuthConfig {
+        OAuthConfig {
+            app_id: "cli_x".into(),
+            app_secret: "s".into(),
+            open_base: "https://open.larksuite.com".into(),
+            accounts_base: "https://accounts.larksuite.com".into(),
+            admins: admins.iter().map(|a| a.to_string()).collect(),
+            redirect_uri: None,
+            scope: scope.map(str::to_string),
+        }
+    }
+
+    #[test]
+    fn effective_scope_defaults_to_full_set_only_with_an_allowlist() {
+        // unset + allowlist => request the full identity set so emails come back
+        assert_eq!(
+            effective_scope(&cfg_with(None, &["a@x.io"])).as_deref(),
+            Some(DEFAULT_USER_INFO_SCOPES)
+        );
+        // unset + open console => request nothing (bootstrap stays frictionless)
+        assert_eq!(effective_scope(&cfg_with(None, &[])), None);
+    }
+
+    #[test]
+    fn effective_scope_honors_explicit_override() {
+        // explicit value wins verbatim (trimmed), even with an allowlist set
+        assert_eq!(
+            effective_scope(&cfg_with(Some("  custom:scope  "), &["a@x.io"])).as_deref(),
+            Some("custom:scope")
+        );
+        // explicit empty opts out of any scope
+        assert_eq!(effective_scope(&cfg_with(Some("   "), &["a@x.io"])), None);
     }
 
     #[test]

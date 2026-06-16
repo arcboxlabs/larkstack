@@ -53,7 +53,11 @@ const DEFAULT_CONFIG: &str = r#"# larkstack console config
 # lark_app = "main"             # which [lark-apps.<name>] signs users in
 # admins = ["you@example.com"]  # allowlist (matches Lark email); empty = any tenant user
 # redirect_uri = ""             # override the auto-derived <host>/auth/callback
-# scope = ""                    # extra OAuth scopes, space-separated (usually none)
+# scope = ""                    # OAuth scopes (space-separated). Unset + admins set =>
+#                               # request the full user_info identity set by default
+#                               # (email/enterprise_email/user_id/mobile); set empty to
+#                               # request none. Every scope requested must be granted on
+#                               # the Lark app's Permission Management page (else err 20027).
 
 [linear]
 enabled = false
