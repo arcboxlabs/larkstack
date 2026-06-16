@@ -4,14 +4,13 @@ import { Link, Outlet, useLocation } from "react-router";
 import { logout, useMe } from "../lib/auth";
 import { OpenConsoleBanner } from "./OpenConsoleBanner";
 
+// Top-level navigation. The per-app pages (Linear/GitHub/GitLab/Standup) are
+// reached by clicking into an app from the Apps overview, not from here — so
+// they stay out of the header to keep it from growing with every integration.
 const TABS = [
-  { to: "/status", label: "Status" },
+  { to: "/status", label: "Apps" },
   { to: "/actions", label: "Actions" },
   { to: "/lark-apps", label: "Lark Apps" },
-  { to: "/linear", label: "Linear" },
-  { to: "/github", label: "GitHub" },
-  { to: "/gitlab", label: "GitLab" },
-  { to: "/standup", label: "Standup" },
   { to: "/config", label: "Config" },
   { to: "/events", label: "Events" },
 ] as const;

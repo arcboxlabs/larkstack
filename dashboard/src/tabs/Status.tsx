@@ -1,7 +1,17 @@
 import { Switch } from "@base-ui/react/switch";
 import { useState } from "react";
+import { Link } from "react-router";
 import useSWR, { mutate } from "swr";
 import { errMessage, mutateRequest } from "../lib/http";
+
+/// Apps that have a dedicated config page. Their card title links there; apps
+/// without one (e.g. preview-only integrations) render a plain, static title.
+const APP_ROUTES: Record<string, string> = {
+  linear: "/linear",
+  github: "/github",
+  gitlab: "/gitlab",
+  standup: "/standup",
+};
 
 type State = "starting" | "running" | "errored" | "stopped";
 
@@ -70,7 +80,7 @@ export function Status() {
 
   return (
     <section>
-      <h2>Subsystems</h2>
+      <h2>Apps</h2>
       {error && <p className="error">Failed to load: {errMessage(error)}</p>}
       {toggleError && <p className="error">{toggleError}</p>}
       {!apps && <p>Loading…</p>}
@@ -81,10 +91,17 @@ export function Status() {
             const s = subsystems[app.name];
             const state: State =
               s?.state ?? (app.enabled ? "starting" : "stopped");
+            const route = APP_ROUTES[app.name];
             return (
               <article key={app.name} className={`status-card ${state}`}>
                 <header>
-                  <span className="status-name">{app.name}</span>
+                  {route ? (
+                    <Link className="status-name link" to={route}>
+                      {app.name}
+                    </Link>
+                  ) : (
+                    <span className="status-name">{app.name}</span>
+                  )}
                   <div className="status-controls">
                     <span
                       className="status-pill"
