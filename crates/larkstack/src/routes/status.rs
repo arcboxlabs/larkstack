@@ -47,7 +47,7 @@ pub(crate) async fn apps(State(s): State<HostState>) -> Json<AppsResponse> {
         apps: s
             .manifests
             .iter()
-            .map(|m| AppManifest::new(m, app_enabled(&cfg, &m.name)))
+            .map(|m| AppManifest::new(m, app_enabled(&cfg, &m.name), app_lark_app(&cfg, &m.name)))
             .collect(),
     })
 }
@@ -59,6 +59,14 @@ fn app_enabled(config: &str, name: &str) -> bool {
         .ok()
         .and_then(|v| v.get(name)?.get("enabled")?.as_bool())
         .unwrap_or(false)
+}
+
+/// Read `[<name>].lark_app` — the `[lark-apps.<ref>]` this app binds for Lark
+/// credentials, so the UI can show and edit the binding without raw TOML.
+fn app_lark_app(config: &str, name: &str) -> Option<String> {
+    toml::from_str::<toml::Value>(config)
+        .ok()
+        .and_then(|v| Some(v.get(name)?.get("lark_app")?.as_str()?.to_string()))
 }
 
 // ---- wire types ------------------------------------------------------------
@@ -129,16 +137,21 @@ pub(crate) struct AppManifest {
     description: String,
     /// Whether the supervisor is configured to run this app (`[<name>].enabled`).
     enabled: bool,
+    /// The `[lark-apps.<name>]` this app binds for Lark credentials
+    /// (`[<name>].lark_app`), if any. Editable via `PUT /api/config/{app}/lark-app`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    lark_app: Option<String>,
     actions: Vec<AppActionSpec>,
 }
 
 impl AppManifest {
-    fn new(m: &CoreManifest, enabled: bool) -> Self {
+    fn new(m: &CoreManifest, enabled: bool, lark_app: Option<String>) -> Self {
         Self {
             name: m.name.clone(),
             kind: m.kind.into(),
             description: m.description.clone(),
             enabled,
+            lark_app,
             actions: m.actions.iter().map(AppActionSpec::from).collect(),
         }
     }

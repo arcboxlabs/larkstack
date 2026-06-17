@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes } from "react-router";
 import { Layout } from "./components/Layout";
+import { Spinner } from "./components/Spinner";
 import { Login } from "./Login";
 import { useMe } from "./lib/auth";
 import { Actions } from "./tabs/Actions";
@@ -9,19 +10,17 @@ import { GitHub } from "./tabs/GitHub";
 import { Gitlab } from "./tabs/Gitlab";
 import { LarkApps } from "./tabs/LarkApps";
 import { Linear } from "./tabs/Linear";
+import { Minutes } from "./tabs/Minutes";
 import { Setup } from "./tabs/Setup";
 import { Standup } from "./tabs/Standup";
 import { Status } from "./tabs/Status";
+import { X } from "./tabs/X";
 
 export function App() {
   const { me } = useMe();
 
   if (!me) {
-    return (
-      <main>
-        <p>Loading…</p>
-      </main>
-    );
+    return <Spinner fullscreen />;
   }
   if (me.auth_required && !me.authenticated) {
     return <Login />;
@@ -42,7 +41,9 @@ export function App() {
         <Route path="linear" element={<Linear />} />
         <Route path="github" element={<GitHub />} />
         <Route path="gitlab" element={<Gitlab />} />
+        <Route path="x" element={<X />} />
         <Route path="standup" element={<Standup />} />
+        <Route path="minutes" element={<Minutes />} />
         <Route path="config" element={<Config />} />
         <Route path="events" element={<Events />} />
         <Route path="*" element={<Navigate to={home} replace />} />

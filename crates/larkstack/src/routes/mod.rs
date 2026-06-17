@@ -167,6 +167,7 @@ pub(crate) fn build(
         .routes(routes!(status::apps))
         .routes(routes!(config::get_config, config::put_config))
         .routes(routes!(config::set_app_enabled))
+        .routes(routes!(config::set_app_lark_app))
         .routes(routes!(events::events))
         .routes(routes!(lark_apps::list, lark_apps::upsert))
         .routes(routes!(lark_apps::test))

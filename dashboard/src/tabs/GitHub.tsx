@@ -1,3 +1,4 @@
+import { LarkBinding } from "../components/LarkBinding";
 import { type EventOption, RoutingEditor } from "../components/RoutingEditor";
 
 const GITHUB_EVENTS: EventOption[] = [
@@ -12,6 +13,7 @@ export function GitHub() {
   return (
     <section>
       <h2>GitHub</h2>
+      <LarkBinding appName="github" />
       <RoutingEditor appName="github" eventOptions={GITHUB_EVENTS} />
     </section>
   );

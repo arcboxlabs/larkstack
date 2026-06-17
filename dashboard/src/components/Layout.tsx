@@ -4,9 +4,9 @@ import { Link, Outlet, useLocation } from "react-router";
 import { logout, useMe } from "../lib/auth";
 import { OpenConsoleBanner } from "./OpenConsoleBanner";
 
-// Top-level navigation. The per-app pages (Linear/GitHub/GitLab/Standup) are
-// reached by clicking into an app from the Apps overview, not from here — so
-// they stay out of the header to keep it from growing with every integration.
+// Top-level navigation. The per-app pages (Linear/GitHub/GitLab/X/Standup/
+// Minutes) are reached by clicking into an app from the Apps overview, not from
+// here — so they stay out of the header to keep it from growing with every app.
 const TABS = [
   { to: "/status", label: "Apps" },
   { to: "/actions", label: "Actions" },
