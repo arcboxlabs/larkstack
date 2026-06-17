@@ -69,9 +69,22 @@ export interface RoutingEditorProps {
   appName: string;
   /** The app's event vocabulary, shown as per-rule filter checkboxes. */
   eventOptions: EventOption[];
+  /**
+   * Show the reviewer user-map section (default `true`). Linear keeps its own
+   * DB-backed Linear→Lark email map, so it hides this routing-blob one.
+   */
+  showUserMap?: boolean;
+  /** Show the alert-labels section (default `true`). Unused by apps without
+   * label-triggered alerts (e.g. Linear). */
+  showAlertLabels?: boolean;
 }
 
-export function RoutingEditor({ appName, eventOptions }: RoutingEditorProps) {
+export function RoutingEditor({
+  appName,
+  eventOptions,
+  showUserMap = true,
+  showAlertLabels = true,
+}: RoutingEditorProps) {
   const url = `/api/apps/${appName}/routing`;
   const { data, error, mutate } = useSWR<RoutingConfig>(url);
   // The bot's chats power the chat-picker; absent (503) when the app is stopped
@@ -305,86 +318,96 @@ export function RoutingEditor({ appName, eventOptions }: RoutingEditorProps) {
       />
 
       {/* ── Reviewer user map ── */}
-      <div className="actions-subsystem" style={{ marginTop: "1.5rem" }}>
-        reviewer user map (source username → Lark email)
-      </div>
-      {edit.user_map.map((m) => (
-        <div key={m.key} className="filters" style={{ marginBottom: "0.4rem" }}>
-          <Input
-            className="field-input"
-            placeholder="username"
-            value={m.username}
-            onChange={(e) =>
-              setEdit((s) =>
-                patchUser(s, m.key, (u) => ({
-                  ...u,
-                  username: e.target.value,
-                })),
-              )
-            }
-          />
-          <Input
-            className="field-input"
-            placeholder="lark@email"
-            value={m.lark_email}
-            onChange={(e) =>
-              setEdit((s) =>
-                patchUser(s, m.key, (u) => ({
-                  ...u,
-                  lark_email: e.target.value,
-                })),
-              )
-            }
-          />
+      {showUserMap && (
+        <>
+          <div className="actions-subsystem" style={{ marginTop: "1.5rem" }}>
+            reviewer user map (source username → Lark email)
+          </div>
+          {edit.user_map.map((m) => (
+            <div
+              key={m.key}
+              className="filters"
+              style={{ marginBottom: "0.4rem" }}
+            >
+              <Input
+                className="field-input"
+                placeholder="username"
+                value={m.username}
+                onChange={(e) =>
+                  setEdit((s) =>
+                    patchUser(s, m.key, (u) => ({
+                      ...u,
+                      username: e.target.value,
+                    })),
+                  )
+                }
+              />
+              <Input
+                className="field-input"
+                placeholder="lark@email"
+                value={m.lark_email}
+                onChange={(e) =>
+                  setEdit((s) =>
+                    patchUser(s, m.key, (u) => ({
+                      ...u,
+                      lark_email: e.target.value,
+                    })),
+                  )
+                }
+              />
+              <Button
+                type="button"
+                className="action-btn error"
+                onClick={() =>
+                  setEdit((s) =>
+                    s
+                      ? {
+                          ...s,
+                          user_map: s.user_map.filter((u) => u.key !== m.key),
+                        }
+                      : s,
+                  )
+                }
+              >
+                Remove
+              </Button>
+            </div>
+          ))}
           <Button
             type="button"
-            className="action-btn error"
             onClick={() =>
               setEdit((s) =>
                 s
                   ? {
                       ...s,
-                      user_map: s.user_map.filter((u) => u.key !== m.key),
+                      user_map: [
+                        ...s.user_map,
+                        { key: nextKey(), username: "", lark_email: "" },
+                      ],
                     }
                   : s,
               )
             }
           >
-            Remove
+            Add mapping
           </Button>
-        </div>
-      ))}
-      <Button
-        type="button"
-        onClick={() =>
-          setEdit((s) =>
-            s
-              ? {
-                  ...s,
-                  user_map: [
-                    ...s.user_map,
-                    { key: nextKey(), username: "", lark_email: "" },
-                  ],
-                }
-              : s,
-          )
-        }
-      >
-        Add mapping
-      </Button>
+        </>
+      )}
 
       {/* ── Alert labels ── */}
-      <label className="field" style={{ marginTop: "1.5rem" }}>
-        <span className="field-label">alert labels (comma-separated)</span>
-        <Input
-          className="field-input"
-          placeholder="bug, urgent, p0"
-          value={edit.alert_labels}
-          onChange={(e) =>
-            setEdit((s) => (s ? { ...s, alert_labels: e.target.value } : s))
-          }
-        />
-      </label>
+      {showAlertLabels && (
+        <label className="field" style={{ marginTop: "1.5rem" }}>
+          <span className="field-label">alert labels (comma-separated)</span>
+          <Input
+            className="field-input"
+            placeholder="bug, urgent, p0"
+            value={edit.alert_labels}
+            onChange={(e) =>
+              setEdit((s) => (s ? { ...s, alert_labels: e.target.value } : s))
+            }
+          />
+        </label>
+      )}
 
       <div className="filters" style={{ marginTop: "1rem" }}>
         <Button type="button" onClick={onSave} disabled={save.isMutating}>

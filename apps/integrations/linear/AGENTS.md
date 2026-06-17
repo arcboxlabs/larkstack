@@ -15,7 +15,8 @@ The tree follows the data path — HTTP in, normalize, adapt out:
   - `webhook.rs` — `POST /webhooks/linear/webhook`: HMAC-verify → parse → normalize → debounce/dispatch.
   - `preview.rs` — `POST /webhooks/linear/lark/event`: Lark `url.preview.get` callback → link preview.
 - **`domain/`** — normalized core, independent of HTTP/Linear/Lark.
-  - `mod.rs` — `IssueNotification`, `Priority` (Linear's 0–4 scale normalized).
+  - `mod.rs` — `IssueNotification`, `Priority` (Linear's 0–4 scale normalized), and
+    `team_key` (the routing subject — an identifier's prefix, `ENG-42` → `ENG`).
   - `debounce.rs` — `DebounceMap`: coalesces rapid issue updates into one card.
 - **`source/`** — the Linear adapter (the external system bridged *from*).
   - `payload.rs` — deserialization types for inbound **webhook** JSON.
@@ -24,9 +25,11 @@ The tree follows the data path — HTTP in, normalize, adapt out:
     bindings + hand-mapped projections (`LinearIssueData`, `DueIssue`,
     `IssueSubscriberInfo`, `LinearUser`) + `extract_identifier_from_url`.
 - **`lark/`** — the Lark adapter (bridged *to*).
-  - `cards.rs` — card builders: group (`issue_card`/`comment_card`) and DM
+  - `cards.rs` — card builders: group-chat (`issue_card`/`comment_card`) and DM
     (`assign_dm`/`reminder_dm`/`subscriber_issue_dm`/`subscriber_comment_dm`/`preview_card`).
-  - `notify.rs` — send: `group` webhook, single `dm`, and `dm_many` fan-out.
+    All return `LarkCard` — group cards now ship through the bot (routing), not a webhook.
+  - `notify.rs` — DM senders only (single `dm`, `dm_many` fan-out); group cards go
+    through `lark_kit::routing::deliver_all` from `routes::webhook`.
 - **`scheduler.rs`** — background due-date reminder loop (runs alongside the
   webhook server, both honoring `cancel`). Polls `fetch_issues_due_soon`, picks
   the applicable cadence tier, dedupes via `db::due_reminders`, DMs the
@@ -44,19 +47,39 @@ The tree follows the data path — HTTP in, normalize, adapt out:
     `(issue_id, due_date, tier)`); `already_sent`/`record` so each cadence tier
     fires once per deadline.
 - **top level** — wiring: `app.rs` (`App`/`Instance`; `ingress_routes` publishes the
-  `StateSlot`, `run` publishes live state + drives the reminder scheduler,
-  `migrations`/`routes`), `config.rs` (`AppState` + TOML/env), `actions.rs` (console
-  actions: `ping`, `test-lark`), `lib.rs`.
+  `StateSlot`, `run` publishes live state + the bot (for the routing `/chats` route) +
+  drives the reminder scheduler, `migrations`/`routes`), `config.rs` (`AppState` +
+  TOML/env; holds both the `db` and the `StateStore`), `actions.rs` (console actions:
+  `ping`, `test-notify` — sends a test card to a `chat`/`dm` target), `lib.rs`.
+
+## Notification routing (console-configured, shared)
+
+Group-chat delivery uses the shared `lark_kit::routing` module (same as github/gitlab).
+The webhook loads the config **fresh from the per-App `StateStore`** (`namespace =
+"linear"`) on every event, so console edits apply with no restart. The config — rules
+(`{team-key → chat/DM}`) + default destinations — is edited from the console's **Linear**
+tab (`GET/PUT /api/apps/linear/routing`, plus `GET /api/apps/linear/chats` for the
+chat-picker). The **routing subject is the team key** (`domain::team_key`, the identifier
+prefix), and the **event** is `"issue"` (create/update) or `"comment"`. So "all updates →
+one chat" is a `match = "*"` rule (or a default destination); "team ENG → chat X" is `match
+= "ENG"`. Delivery is **bot-only** (group chat by `chat_id`, DM by email), so a `lark_app`
+must be bound for group notifications to send.
+
+Routing's own `user_map`/`alert_labels` fields are **unused** here: Linear keeps its
+richer DB-backed `user_map` (Linear-email → Lark-email, below) for assignee/subscriber
+DMs, and has no label-triggered alerts. The console's Linear routing editor hides both.
 
 ## Flows
 
 **Notifications** (`POST /webhooks/linear/webhook`): verify `linear-signature` HMAC → parse
 `source::payload::LinearPayload` → match `(type, action)`:
 - `Issue` create/update → `domain::IssueNotification` → `domain::debounce` (merge
-  within the window) → `lark::cards::issue_card` → `lark::notify::group` +
-  assignee `notify::dm`. The assignee DM target is the Linear email resolved
-  through `db::user_map::resolve_lark_email` (override if any, else unchanged).
-- `Comment` create → `lark::cards::comment_card` → `notify::group` (no debounce).
+  within the window) → `lark::cards::issue_card` → `routing::deliver_all` to
+  `cfg.destinations_for(team_key, "issue")` + assignee `notify::dm`. The assignee DM
+  target is the Linear email resolved through `db::user_map::resolve_lark_email`
+  (override if any, else unchanged).
+- `Comment` create → `lark::cards::comment_card` → `routing::deliver_all` to
+  `cfg.destinations_for(team_key, "comment")` (no debounce).
 
 **Subscriber fan-out** (per-person DMs, layered on the above): when an event
 qualifies under `settings` — comments (`subscriber_on_comment`), status changes
@@ -116,13 +139,14 @@ for drift, not as a generator.
 ## Config / env
 
 `App::build` reads `[linear]` from the full config TOML, overlaying env per field.
-`config.toml` carries only secrets/bindings;
-**behavioral toggles live in the `linear_settings` DB row**, edited live from the
-console's **Linear** tab (no restart).
+`config.toml` carries only secrets/bindings; **behavioral toggles live in the
+`linear_settings` DB row and the routing config in the `StateStore`**, both edited live
+from the console's **Linear** tab (no restart).
 - `LINEAR_WEBHOOK_SECRET` — HMAC secret (required for the webhook path).
 - `LINEAR_API_KEY` — Linear GraphQL key; **optional**, but required for link
   previews, **due-date reminders, and subscriber fan-out** (all no-op without it).
-- `LARK_*` / `lark_app = "<name>"` — Lark sink (group webhook + bot DM); see root `AGENTS.md`.
+- `LARK_*` / `lark_app = "<name>"` — Lark bot, used for **both** group-chat and DM
+  delivery (routing is bot-only); see root `AGENTS.md`.
 - `[linear].debounce_delay_ms` (default `5000`) — issue-update coalescing window.
 
 ## Commands

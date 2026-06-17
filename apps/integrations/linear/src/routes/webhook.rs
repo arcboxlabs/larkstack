@@ -10,11 +10,12 @@ use axum::{
 };
 use lark_kit::Live;
 use lark_kit::card::LarkCard;
+use lark_kit::routing::{Config, deliver_all};
 use tracing::{error, info, warn};
 
 use crate::config::AppState;
 use crate::domain::debounce::PendingUpdate;
-use crate::domain::{IssueNotification, Priority};
+use crate::domain::{IssueNotification, Priority, team_key};
 use crate::lark::{cards, notify};
 use crate::source::changes::build_change_fields;
 use crate::source::payload::{Actor, CommentData, Issue, LinearPayload, UpdatedFrom};
@@ -137,17 +138,17 @@ pub async fn webhook_handler(
                 .map(|a| a.name.clone())
                 .unwrap_or_else(|| "Someone".into());
             info!("processing Comment create on {identifier}");
-            notify::group(
-                &state,
-                &cards::comment_card(
-                    &identifier,
-                    &issue_title,
-                    &author,
-                    &comment.body,
-                    &payload.url,
-                ),
-            )
-            .await;
+            // Route the group card by team key (live config, loaded per webhook).
+            let cfg = Config::load(&state.store, "linear").await;
+            let dests = cfg.destinations_for(team_key(&identifier), "comment");
+            let card = cards::comment_card(
+                &identifier,
+                &issue_title,
+                &author,
+                &comment.body,
+                &payload.url,
+            );
+            deliver_all(state.bot.as_deref(), &dests, &card).await;
 
             // DM each subscriber (needs the API key + the commented issue id).
             let settings = crate::db::settings::load(&state.db).await;
@@ -214,7 +215,16 @@ async fn send_debounced(state: &AppState, pending: PendingUpdate) {
     };
     info!("sending debounced {kind} – changes: {changes}");
 
-    notify::group(state, &cards::issue_card(&pending.notif)).await;
+    // Route the group card by team key (live config, loaded at send time so edits
+    // during the debounce window apply).
+    let cfg = Config::load(&state.store, "linear").await;
+    let dests = cfg.destinations_for(team_key(&pending.notif.identifier), "issue");
+    deliver_all(
+        state.bot.as_deref(),
+        &dests,
+        &cards::issue_card(&pending.notif),
+    )
+    .await;
     if let Some(linear_email) = &pending.dm_email {
         // The webhook gives us the assignee's Linear email; resolve it to their
         // Lark email through the admin override table (no-op when they match).

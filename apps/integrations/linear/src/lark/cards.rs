@@ -1,6 +1,6 @@
 //! Linear issue/comment → Lark card builders.
 
-use lark_kit::card::{LarkCard, LarkMessage, card, link_button, md_div, message};
+use lark_kit::card::{LarkCard, card, link_button, md_div};
 use lark_kit::truncate;
 use serde_json::{Value, json};
 
@@ -33,8 +33,8 @@ fn view_button(url: &str) -> Value {
     link_button(url, "View in Linear")
 }
 
-/// Group-webhook card for an issue create/update.
-pub fn issue_card(n: &IssueNotification) -> LarkMessage {
+/// Group-chat card for an issue create/update (delivered to the routing destinations).
+pub fn issue_card(n: &IssueNotification) -> LarkCard {
     let action = if n.is_create { "Created" } else { "Updated" };
     let mut elements = vec![md_div(&format!("**{}**", n.title))];
 
@@ -59,21 +59,21 @@ pub fn issue_card(n: &IssueNotification) -> LarkMessage {
     ));
     elements.push(view_button(&n.url));
 
-    message(card(
+    card(
         priority_color(&n.priority),
         format!("[Linear] {action}: {}", n.identifier),
         elements,
-    ))
+    )
 }
 
-/// Group-webhook card for a new comment.
+/// Group-chat card for a new comment (delivered to the routing destinations).
 pub fn comment_card(
     identifier: &str,
     issue_title: &str,
     author: &str,
     body: &str,
     url: &str,
-) -> LarkMessage {
+) -> LarkCard {
     let issue_ref = if issue_title.is_empty() {
         "an issue".to_string()
     } else {
@@ -89,11 +89,7 @@ pub fn comment_card(
     }
     elements.push(view_button(url));
 
-    message(card(
-        "blue",
-        format!("[Linear] Comment: {identifier}"),
-        elements,
-    ))
+    card("blue", format!("[Linear] Comment: {identifier}"), elements)
 }
 
 /// DM card notifying the assignee about an issue.

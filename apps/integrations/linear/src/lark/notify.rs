@@ -1,14 +1,10 @@
-//! Sends Linear notification cards to Lark — group webhook + assignee DM.
+//! Sends Linear DM cards to Lark via the bot. Group-chat cards go through
+//! [`lark_kit::routing`] instead (see [`crate::routes::webhook`]).
 
-use lark_kit::card::{LarkCard, LarkMessage};
+use lark_kit::card::LarkCard;
 use tracing::error;
 
 use crate::config::AppState;
-
-/// Posts a card to the configured Lark group webhook.
-pub async fn group(state: &AppState, card: &LarkMessage) {
-    lark_kit::send_lark_card(&state.http, &state.lark.webhook_url, card).await;
-}
 
 /// DMs a single user by Lark email (no-op when no bot is configured).
 pub async fn dm(state: &AppState, email: &str, card: &LarkCard) {

@@ -4,6 +4,16 @@
 pub mod debounce;
 pub mod reminders;
 
+/// The routing *subject* for a Linear issue: its team key, taken from the
+/// identifier prefix (`ENG-42` → `ENG`). Linear identifiers are always
+/// `<teamKey>-<number>`, so this is uniform across issues and comments without
+/// reaching into the payload's team object. Used to match `lark_kit::routing`
+/// rules — an admin routes a team's notifications by its key. Falls back to the
+/// whole identifier when there's no `-` (e.g. an unknown `"?"`).
+pub fn team_key(identifier: &str) -> &str {
+    identifier.split('-').next().unwrap_or(identifier)
+}
+
 /// Issue priority, normalized from Linear's `0`–`4` scale.
 pub enum Priority {
     None,
@@ -66,4 +76,20 @@ pub struct IssueNotification {
     pub assignee: Option<String>,
     pub url: String,
     pub changes: Vec<String>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::team_key;
+
+    #[test]
+    fn team_key_is_the_identifier_prefix() {
+        assert_eq!(team_key("ENG-42"), "ENG");
+        assert_eq!(team_key("PROD-1234"), "PROD");
+        // No dash (e.g. an unknown comment identifier) → the whole string.
+        assert_eq!(team_key("?"), "?");
+        assert_eq!(team_key(""), "");
+        // Only the first segment matters even with extra dashes.
+        assert_eq!(team_key("ENG-42-x"), "ENG");
+    }
 }

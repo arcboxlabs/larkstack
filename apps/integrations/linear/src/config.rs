@@ -1,5 +1,7 @@
+use std::sync::Arc;
+
 use lark_kit::{LarkBotClient, LarkConfig, TomlLark};
-use larkstack_core::LarkRegistry;
+use larkstack_core::{LarkRegistry, StateStore};
 use reqwest::Client;
 use sea_orm::DatabaseConnection;
 use serde::Deserialize;
@@ -46,11 +48,15 @@ pub struct AppState {
     pub lark: LarkConfig,
     pub debounce_delay_ms: u64,
     pub http: Client,
-    pub bot: Option<LarkBotClient>,
+    pub bot: Option<Arc<LarkBotClient>>,
     pub linear_client: Option<LinearClient>,
     pub debounce: DebounceMap,
-    /// Shared App database — backs the [`user_map`](crate::db::user_map) overrides.
+    /// Shared App database — backs the [`user_map`](crate::db::user_map) overrides
+    /// and the [`settings`](crate::db::settings) row.
     pub db: DatabaseConnection,
+    /// Per-App KV store — backs the live notification [routing](lark_kit::routing)
+    /// config, loaded fresh on every webhook so console edits apply without a restart.
+    pub store: Arc<dyn StateStore>,
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -74,8 +80,13 @@ struct Section {
 }
 
 impl AppState {
-    /// Build state from a full config TOML containing a `[linear]` section.
-    pub fn from_toml(full_toml: &str, db: DatabaseConnection) -> Result<Self, Box<figment::Error>> {
+    /// Build state from a full config TOML containing a `[linear]` section, plus the
+    /// per-App [`StateStore`] (backs the live routing config) and shared `db`.
+    pub fn from_toml(
+        full_toml: &str,
+        store: Arc<dyn StateStore>,
+        db: DatabaseConnection,
+    ) -> Result<Self, Box<figment::Error>> {
         let top: TopLevel =
             toml::from_str(full_toml).map_err(|e| Box::new(figment::Error::from(e.to_string())))?;
         let section = top.linear;
@@ -101,17 +112,18 @@ impl AppState {
 
         let debounce_delay_ms = section.debounce_delay_ms.unwrap_or_else(default_debounce);
 
-        Ok(Self::from_parts(linear, lark, debounce_delay_ms, db))
+        Ok(Self::from_parts(linear, lark, debounce_delay_ms, store, db))
     }
 
     fn from_parts(
         linear: LinearConfig,
         lark: LarkConfig,
         debounce_delay_ms: u64,
+        store: Arc<dyn StateStore>,
         db: DatabaseConnection,
     ) -> Self {
         let http = Client::new();
-        let bot = lark.bot_client(&http);
+        let bot = lark.bot_client(&http).map(Arc::new);
         let linear_client = linear.graphql_client(&http);
         info!("debounce delay: {debounce_delay_ms}ms");
         Self {
@@ -123,6 +135,7 @@ impl AppState {
             linear_client,
             debounce: DebounceMap::new(),
             db,
+            store,
         }
     }
 }
