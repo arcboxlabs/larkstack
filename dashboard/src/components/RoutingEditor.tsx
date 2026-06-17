@@ -1,4 +1,5 @@
 import { Button } from "@base-ui/react/button";
+import { Combobox } from "@base-ui/react/combobox";
 import { Input } from "@base-ui/react/input";
 import { useEffect, useRef, useState } from "react";
 import useSWR from "swr";
@@ -32,6 +33,10 @@ interface RoutingConfig {
 }
 interface Chat {
   chat_id: string;
+  name: string;
+}
+interface User {
+  open_id: string;
   name: string;
 }
 
@@ -87,10 +92,13 @@ export function RoutingEditor({
 }: RoutingEditorProps) {
   const url = `/api/apps/${appName}/routing`;
   const { data, error, mutate } = useSWR<RoutingConfig>(url);
-  // The bot's chats power the chat-picker; absent (503) when the app is stopped
-  // or has no bot — the chat fields then fall back to manual chat_id entry.
-  const chatsListId = `chats-${appName}`;
+  // The bot's chats + reachable users power the searchable pickers; absent (503)
+  // when the app is stopped or has no bot — the fields then fall back to manual
+  // entry. `shouldRetryOnError: false` so a stopped app doesn't retry-storm.
   const { data: chats } = useSWR<Chat[]>(`/api/apps/${appName}/chats`, {
+    shouldRetryOnError: false,
+  });
+  const { data: users } = useSWR<User[]>(`/api/apps/${appName}/users`, {
     shouldRetryOnError: false,
   });
   const [edit, setEdit] = useState<EditState | null>(null);
@@ -163,19 +171,10 @@ export function RoutingEditor({
   return (
     <div className="action-card">
       <p className="muted help-text">
-        Route events to Lark group chats (by <code>chat_id</code>) or DMs (by
-        email). Changes apply live — no restart. Delivery needs a bound{" "}
-        <code>lark_app</code> bot.
+        Route events to Lark group chats or DMs — pick from the bot's chats and
+        users, or type a <code>chat_id</code> / email. Changes apply live — no
+        restart. Delivery needs a bound <code>lark_app</code> bot.
       </p>
-      {chats && chats.length > 0 && (
-        <datalist id={chatsListId}>
-          {chats.map((c) => (
-            <option key={c.chat_id} value={c.chat_id}>
-              {c.name}
-            </option>
-          ))}
-        </datalist>
-      )}
 
       {/* ── Rules ── */}
       <div className="actions-subsystem">routing rules</div>
@@ -238,7 +237,8 @@ export function RoutingEditor({
 
           <DestinationList
             dests={rule.destinations}
-            chatsListId={chatsListId}
+            chats={chats}
+            users={users}
             onChange={(ds) =>
               setEdit((s) =>
                 patchRule(s, rule.key, (r) => ({ ...r, destinations: ds })),
@@ -301,7 +301,8 @@ export function RoutingEditor({
       </div>
       <DestinationList
         dests={edit.default_destinations}
-        chatsListId={chatsListId}
+        chats={chats}
+        users={users}
         onChange={(ds) =>
           setEdit((s) => (s ? { ...s, default_destinations: ds } : s))
         }
@@ -425,15 +426,22 @@ export function RoutingEditor({
 
 function DestinationList({
   dests,
-  chatsListId,
+  chats,
+  users,
   onChange,
   onAdd,
 }: {
   dests: DestRow[];
-  chatsListId: string;
+  chats: Chat[] | undefined;
+  users: User[] | undefined;
   onChange: (ds: DestRow[]) => void;
   onAdd: () => void;
 }) {
+  const patch = (key: number, fn: (d: DestRow) => DestRow) =>
+    onChange(dests.map((x) => (x.key === key ? fn(x) : x)));
+  // Picker sources: chats keyed by chat_id, users keyed by open_id.
+  const chatItems = chats?.map((c) => ({ value: c.chat_id, label: c.name }));
+  const userItems = users?.map((u) => ({ value: u.open_id, label: u.name }));
   return (
     <div style={{ marginTop: "0.5rem" }}>
       <span className="field-label">destinations</span>
@@ -444,28 +452,27 @@ function DestinationList({
             style={{ width: "auto" }}
             value={d.kind}
             onValueChange={(v) =>
-              onChange(
-                dests.map((x) =>
-                  x.key === d.key ? { ...x, kind: v as DestKind } : x,
-                ),
-              )
+              // Switching kind clears the target — a chat_id and a user id aren't
+              // interchangeable, and the picker source differs.
+              patch(d.key, (x) => ({ ...x, kind: v as DestKind, target: "" }))
             }
             options={[
               { value: "chat", label: "Group chat" },
               { value: "dm", label: "Direct message" },
             ]}
           />
-          <Input
-            className="field-input"
-            list={d.kind === "chat" ? chatsListId : undefined}
-            placeholder={d.kind === "chat" ? "chat_id (oc_…)" : "user@email"}
+          <PickerField
+            items={d.kind === "chat" ? chatItems : userItems}
             value={d.target}
-            onChange={(e) =>
-              onChange(
-                dests.map((x) =>
-                  x.key === d.key ? { ...x, target: e.target.value } : x,
-                ),
-              )
+            onChange={(target) => patch(d.key, (x) => ({ ...x, target }))}
+            searchPlaceholder={
+              d.kind === "chat" ? "Search group chats…" : "Search users…"
+            }
+            manualPlaceholder={
+              d.kind === "chat" ? "chat_id (oc_…)" : "open_id / email"
+            }
+            emptyLabel={
+              d.kind === "chat" ? "No matching chats" : "No matching users"
             }
           />
           <Button
@@ -481,6 +488,104 @@ function DestinationList({
         Add destination
       </Button>
     </div>
+  );
+}
+
+interface PickerItem {
+  /** The stored value: a chat_id or a user open_id. */
+  value: string;
+  /** The human label: a chat or user display name. */
+  label: string;
+}
+
+/**
+ * A destination-target field: a searchable Select over `items` (the bot's chats
+ * or reachable users), matched by display name but storing the underlying id.
+ * Since the bot can only deliver to chats/users it can reach, picking from the
+ * fetched list is also the correct constraint. Falls back to a plain text input
+ * when the list is unavailable (app stopped / no bot / 503), so a `chat_id`,
+ * `open_id`, or email can still be entered by hand.
+ */
+function PickerField({
+  items,
+  value,
+  onChange,
+  searchPlaceholder,
+  manualPlaceholder,
+  emptyLabel,
+}: {
+  items: PickerItem[] | undefined;
+  value: string;
+  onChange: (value: string) => void;
+  searchPlaceholder: string;
+  manualPlaceholder: string;
+  emptyLabel: string;
+}) {
+  if (!items || items.length === 0) {
+    return (
+      <Input
+        className="field-input"
+        placeholder={manualPlaceholder}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      />
+    );
+  }
+
+  // Build the candidate id list keyed to labels. Include the current value as a
+  // synthetic entry when it's a saved id (or email) not among the fetched items,
+  // so it still shows and stays selected.
+  const byId = new Map(items.map((i) => [i.value, i.label]));
+  const ids = items.map((i) => i.value);
+  if (value && !byId.has(value)) {
+    ids.unshift(value);
+    byId.set(value, value);
+  }
+  const labelOf = (id: string) => byId.get(id) ?? id;
+
+  return (
+    <Combobox.Root
+      items={ids}
+      value={value || null}
+      onValueChange={(v) => onChange((v as string | null) ?? "")}
+      itemToStringLabel={labelOf}
+    >
+      <span className="combobox-control">
+        <Combobox.Input
+          className="field-input combobox-input"
+          placeholder={searchPlaceholder}
+        />
+        <Combobox.Trigger className="combobox-trigger" aria-label="Open">
+          <Combobox.Icon className="select-icon">▾</Combobox.Icon>
+        </Combobox.Trigger>
+      </span>
+      <Combobox.Portal>
+        <Combobox.Positioner sideOffset={4} align="start">
+          <Combobox.Popup className="select-popup combobox-popup">
+            <Combobox.Empty className="combobox-empty">
+              {emptyLabel}
+            </Combobox.Empty>
+            <Combobox.List>
+              {(id: string) => (
+                <Combobox.Item
+                  key={id}
+                  value={id}
+                  className="select-item combobox-item"
+                >
+                  <Combobox.ItemIndicator className="select-item-indicator">
+                    ✓
+                  </Combobox.ItemIndicator>
+                  <span className="combobox-item-text">
+                    <span>{byId.get(id) ?? id}</span>
+                    <span className="combobox-item-id muted">{id}</span>
+                  </span>
+                </Combobox.Item>
+              )}
+            </Combobox.List>
+          </Combobox.Popup>
+        </Combobox.Positioner>
+      </Combobox.Portal>
+    </Combobox.Root>
   );
 }
 

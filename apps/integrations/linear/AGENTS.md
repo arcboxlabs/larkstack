@@ -62,8 +62,9 @@ tab (`GET/PUT /api/apps/linear/routing`, plus `GET /api/apps/linear/chats` for t
 chat-picker). The **routing subject is the team key** (`domain::team_key`, the identifier
 prefix), and the **event** is `"issue"` (create/update) or `"comment"`. So "all updates →
 one chat" is a `match = "*"` rule (or a default destination); "team ENG → chat X" is `match
-= "ENG"`. Delivery is **bot-only** (group chat by `chat_id`, DM by email), so a `lark_app`
-must be bound for group notifications to send.
+= "ENG"`. Delivery is **bot-only** (group chat by `chat_id`, DM by user `open_id` — picked
+from the bot's reachable users — or by email), so a `lark_app` must be bound for group
+notifications to send.
 
 Routing's own `user_map`/`alert_labels` fields are **unused** here: Linear keeps its
 richer DB-backed `user_map` (Linear-email → Lark-email, below) for assignee/subscriber

@@ -39,16 +39,18 @@ impl RoutingApi {
     }
 
     /// The axum router: `GET`/`PUT /routing` (config) + `GET /chats` (the bot's group
-    /// chats, for the console chat-picker). `bots` is the App's live-bot slot — `/chats`
-    /// reads it via [`Live`] and returns `503` while the App is stopped or has no bot.
+    /// chats, for the console chat-picker) + `GET /users` (the users the bot can DM, for
+    /// the user-picker). `bots` is the App's live-bot slot — `/chats` and `/users` read it
+    /// via [`Live`] and return `503` while the App is stopped or has no bot.
     pub fn router(self, bots: StateSlot<LarkBotClient>) -> Router {
         let config = Router::new()
             .route("/routing", get(Self::get).put(Self::put))
             .with_state(self);
-        let chats = Router::new()
+        let live = Router::new()
             .route("/chats", get(list_chats))
+            .route("/users", get(list_users))
             .with_state(bots);
-        config.merge(chats)
+        config.merge(live)
     }
 
     /// The current config (defaults when unset).
@@ -91,6 +93,25 @@ async fn list_chats(Live(bot): Live<LarkBotClient>) -> Result<Json<Vec<ChatInfo>
         .map(|c| ChatInfo {
             chat_id: c.chat_id,
             name: c.name,
+        })
+        .collect();
+    Ok(Json(out))
+}
+
+/// A user the bot can DM, as offered to the console picker.
+#[derive(Serialize)]
+struct UserInfo {
+    open_id: String,
+    name: String,
+}
+
+async fn list_users(Live(bot): Live<LarkBotClient>) -> Result<Json<Vec<UserInfo>>, RoutingError> {
+    let users = bot.list_users().await.map_err(RoutingError::Bot)?;
+    let out = users
+        .into_iter()
+        .map(|u| UserInfo {
+            open_id: u.open_id,
+            name: u.name,
         })
         .collect();
     Ok(Json(out))

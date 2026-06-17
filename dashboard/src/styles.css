@@ -615,6 +615,59 @@ button.signout {
   font-size: 0.75rem;
 }
 
+/* Base UI Combobox rendered as a searchable target field (the chat-picker). */
+.combobox-control {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  width: 18rem;
+  max-width: 100%;
+}
+
+.combobox-input {
+  width: 100%;
+  padding-right: 1.6rem;
+}
+
+.combobox-trigger {
+  position: absolute;
+  right: 0.4rem;
+  display: inline-flex;
+  align-items: center;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  padding: 0;
+  cursor: pointer;
+}
+
+.combobox-popup {
+  width: var(--anchor-width);
+  min-width: 14rem;
+  max-height: 16rem;
+  overflow-y: auto;
+}
+
+.combobox-item {
+  align-items: flex-start;
+}
+
+.combobox-item-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.25;
+}
+
+.combobox-item-id {
+  font-size: 0.7rem;
+}
+
+.combobox-empty {
+  padding: 0.35rem 0.5rem;
+  font-size: 0.8rem;
+  opacity: 0.7;
+}
+
 /* Open-console warning banner + Setup screen */
 .banner-warn {
   display: flex;

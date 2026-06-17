@@ -2,7 +2,7 @@
 //!
 //! An integration (github, gitlab, …) maps a *subject* — a project/repo path such as
 //! `group/project` or `owner/repo` — and an *event* string to one or more Lark
-//! [`Destination`]s (a group chat by `chat_id`, or a DM by email). The ruleset is a single
+//! [`Destination`]s (a group chat by `chat_id`, or a DM by user `open_id`/email). The ruleset is a single
 //! JSON blob in the per-App [`StateStore`] (key [`KEY`]), edited live from the console and
 //! [loaded](Config::load) fresh on every webhook, so changes apply without a restart.
 //!
@@ -31,11 +31,12 @@ pub const KEY: &str = "routing";
 pub enum DestKind {
     /// A Lark group chat, addressed by `chat_id`.
     Chat,
-    /// A direct message to a user, addressed by email.
+    /// A direct message to a user, addressed by their `open_id` (preferred — from the
+    /// console user-picker) or by email (any target containing `@`).
     Dm,
 }
 
-/// One delivery target: a [`DestKind`] plus its address (`chat_id` or email).
+/// One delivery target: a [`DestKind`] plus its address (`chat_id`, or a DM `open_id`/email).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Destination {
     pub kind: DestKind,
@@ -51,7 +52,7 @@ impl Destination {
         }
     }
 
-    /// A DM destination addressed by email.
+    /// A DM destination addressed by user `open_id` (or email).
     pub fn dm(target: impl Into<String>) -> Self {
         Self {
             kind: DestKind::Dm,
@@ -219,7 +220,10 @@ pub async fn deliver(bot: Option<&LarkBotClient>, dest: &Destination, card: &Lar
     };
     let res = match dest.kind {
         DestKind::Chat => bot.reply_to_chat(&dest.target, card).await,
-        DestKind::Dm => bot.send_dm(&dest.target, card).await,
+        // DM targets are user `open_id`s (from the console picker); a target that looks
+        // like an email (`@`) is still delivered by email for back-compat / manual entry.
+        DestKind::Dm if dest.target.contains('@') => bot.send_dm(&dest.target, card).await,
+        DestKind::Dm => bot.send_dm_by_open_id(&dest.target, card).await,
     };
     if let Err(e) = res {
         warn!(

@@ -24,7 +24,7 @@ the config **fresh from the per-App `StateStore`** (`namespace = "github"`) on e
 so console edits apply with no restart. The config — rules (`{repo/org → chat/DM}`), default
 destinations, reviewer `user_map`, and `alert_labels` — is edited from the console's
 **GitHub** tab (`GET/PUT /api/apps/github/routing`). Delivery is bot-only (group chat by
-`chat_id`, DM by email), so a `lark_app` must be bound for notifications to send.
+`chat_id`, DM by user `open_id` or email), so a `lark_app` must be bound for notifications to send.
 
 ## Flow
 
