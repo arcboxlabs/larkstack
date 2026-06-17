@@ -1,9 +1,17 @@
 import { Button } from "@base-ui/react/button";
 import { Field } from "@base-ui/react/field";
+import { Input } from "@base-ui/react/input";
 import { useEffect, useState } from "react";
-import { type UseFormRegisterReturn, useForm } from "react-hook-form";
+import {
+  type Control,
+  Controller,
+  type UseFormRegisterReturn,
+  useForm,
+} from "react-hook-form";
 import useSWR from "swr";
 import useSWRMutation from "swr/mutation";
+import { Checkbox } from "../components/Checkbox";
+import { LarkBinding } from "../components/LarkBinding";
 import { errMessage, mutateRequest } from "../lib/http";
 
 type Feedback = { tone: "ok" | "error"; text: string } | null;
@@ -74,29 +82,52 @@ function formToWire(f: SettingsForm): SettingsWire {
   };
 }
 
+// Boolean fields of the settings form — the per-job enable toggles.
+type BoolField =
+  | "announce_enabled"
+  | "remind_evening_enabled"
+  | "remind_morning_enabled"
+  | "urgent_enabled";
+
 function ScheduleRow({
   label,
   time,
-  enabled,
+  enabledName,
+  control,
 }: {
   label: string;
   time: UseFormRegisterReturn;
-  enabled: UseFormRegisterReturn;
+  enabledName: BoolField;
+  control: Control<SettingsForm>;
 }) {
   return (
     <Field.Root className="field">
       <Field.Label className="field-label">{label}</Field.Label>
       <div style={{ display: "flex", gap: "0.75rem", alignItems: "center" }}>
-        <input
+        <Input
           type="time"
           className="field-input"
           style={{ width: "auto" }}
           {...time}
         />
         <label
+          htmlFor={`standup-${enabledName}`}
           style={{ display: "flex", gap: "0.35rem", alignItems: "center" }}
         >
-          <input type="checkbox" {...enabled} /> enabled
+          <Controller
+            control={control}
+            name={enabledName}
+            render={({ field }) => (
+              <Checkbox
+                id={`standup-${enabledName}`}
+                checked={!!field.value}
+                onCheckedChange={field.onChange}
+                inputRef={field.ref}
+                name={field.name}
+              />
+            )}
+          />{" "}
+          enabled
         </label>
       </div>
     </Field.Root>
@@ -121,10 +152,10 @@ function TemplateField({
           {hint}
         </span>
       </Field.Label>
-      <textarea
+      <Field.Control
         className="field-input"
-        rows={4}
         style={{ fontFamily: "monospace", resize: "vertical" }}
+        render={<textarea rows={4} />}
         {...field}
       />
     </Field.Root>
@@ -135,7 +166,7 @@ function SettingsCard() {
   const { data, error, mutate } = useSWR<SettingsWire>(
     "/api/apps/standup/settings",
   );
-  const { register, handleSubmit, reset } = useForm<SettingsForm>({
+  const { register, handleSubmit, reset, control } = useForm<SettingsForm>({
     defaultValues: DEFAULT_FORM,
   });
   const [feedback, setFeedback] = useState<Feedback>(null);
@@ -188,22 +219,26 @@ function SettingsCard() {
         <ScheduleRow
           label="Announce (next-day doc)"
           time={register("announce_time")}
-          enabled={register("announce_enabled")}
+          enabledName="announce_enabled"
+          control={control}
         />
         <ScheduleRow
           label="Remind — evening (next-day)"
           time={register("remind_evening_time")}
-          enabled={register("remind_evening_enabled")}
+          enabledName="remind_evening_enabled"
+          control={control}
         />
         <ScheduleRow
           label="Remind — morning (today)"
           time={register("remind_morning_time")}
-          enabled={register("remind_morning_enabled")}
+          enabledName="remind_morning_enabled"
+          control={control}
         />
         <ScheduleRow
           label="Urgent (today)"
           time={register("urgent_time")}
-          enabled={register("urgent_enabled")}
+          enabledName="urgent_enabled"
+          control={control}
         />
       </div>
 
@@ -312,6 +347,7 @@ export function Standup() {
   return (
     <section>
       <h2>Standup</h2>
+      <LarkBinding appName="standup" />
       <SettingsCard />
     </section>
   );

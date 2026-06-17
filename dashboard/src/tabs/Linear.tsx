@@ -2,9 +2,12 @@ import { AlertDialog } from "@base-ui/react/alert-dialog";
 import { Button } from "@base-ui/react/button";
 import { Field } from "@base-ui/react/field";
 import { useEffect, useState } from "react";
-import { useForm } from "react-hook-form";
+import { type Control, Controller, useForm } from "react-hook-form";
 import useSWR from "swr";
 import useSWRMutation from "swr/mutation";
+import { Checkbox } from "../components/Checkbox";
+import { LarkBinding } from "../components/LarkBinding";
+import { Select } from "../components/Select";
 import { errMessage, mutateRequest } from "../lib/http";
 
 type Feedback = { tone: "ok" | "error"; text: string } | null;
@@ -61,15 +64,38 @@ function formToWire(f: SettingsForm): SettingsWire {
   };
 }
 
-function Checkbox({
+// Boolean fields of the settings form — the ones rendered as checkboxes.
+type BoolField =
+  | "subscriber_on_comment"
+  | "subscriber_on_status_change"
+  | "subscriber_on_any_update"
+  | "reminders_enabled";
+
+function CheckboxField({
   label,
-  ...rest
-}: { label: string } & React.InputHTMLAttributes<HTMLInputElement>) {
+  name,
+  control,
+}: {
+  label: string;
+  name: BoolField;
+  control: Control<SettingsForm>;
+}) {
   return (
-    <label className="field">
-      <span className="field-label">{label}</span>
-      <input type="checkbox" {...rest} />
-    </label>
+    <Field.Root className="field">
+      <Field.Label className="field-label">{label}</Field.Label>
+      <Controller
+        control={control}
+        name={name}
+        render={({ field }) => (
+          <Checkbox
+            checked={!!field.value}
+            onCheckedChange={field.onChange}
+            inputRef={field.ref}
+            name={field.name}
+          />
+        )}
+      />
+    </Field.Root>
   );
 }
 
@@ -77,7 +103,7 @@ function SettingsCard() {
   const { data, error, mutate } = useSWR<SettingsWire>(
     "/api/apps/linear/settings",
   );
-  const { register, handleSubmit, reset } = useForm<SettingsForm>({
+  const { register, handleSubmit, reset, control } = useForm<SettingsForm>({
     defaultValues: DEFAULT_FORM,
   });
   const [feedback, setFeedback] = useState<Feedback>(null);
@@ -120,31 +146,47 @@ function SettingsCard() {
       </p>
 
       <div className="action-fields">
-        <Checkbox
+        <CheckboxField
           label="Notify subscribers on comments"
-          {...register("subscriber_on_comment")}
+          name="subscriber_on_comment"
+          control={control}
         />
-        <Checkbox
+        <CheckboxField
           label="Notify subscribers on status changes"
-          {...register("subscriber_on_status_change")}
+          name="subscriber_on_status_change"
+          control={control}
         />
-        <Checkbox
+        <CheckboxField
           label="Notify subscribers on any field update"
-          {...register("subscriber_on_any_update")}
+          name="subscriber_on_any_update"
+          control={control}
         />
-        <Checkbox
+        <CheckboxField
           label="Enable due-date reminders"
-          {...register("reminders_enabled")}
+          name="reminders_enabled"
+          control={control}
         />
 
         <Field.Root className="field">
           <Field.Label className="field-label">Reminder recipients</Field.Label>
-          <select className="field-input" {...register("reminder_recipients")}>
-            <option value="assignee">Assignee only</option>
-            <option value="assignee_and_subscribers">
-              Assignee + all subscribers
-            </option>
-          </select>
+          <Controller
+            control={control}
+            name="reminder_recipients"
+            render={({ field }) => (
+              <Select
+                className="field-input field-select"
+                value={field.value}
+                onValueChange={field.onChange}
+                options={[
+                  { value: "assignee", label: "Assignee only" },
+                  {
+                    value: "assignee_and_subscribers",
+                    label: "Assignee + all subscribers",
+                  },
+                ]}
+              />
+            )}
+          />
         </Field.Root>
 
         <Field.Root className="field">
@@ -430,6 +472,7 @@ export function Linear() {
   return (
     <section>
       <h2>Linear</h2>
+      <LarkBinding appName="linear" />
       <SettingsCard />
       <UserMapCard />
     </section>

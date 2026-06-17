@@ -1,8 +1,12 @@
 import { Button } from "@base-ui/react/button";
+import { Input } from "@base-ui/react/input";
 import { useEffect, useRef, useState } from "react";
 import useSWR from "swr";
 import useSWRMutation from "swr/mutation";
 import { errMessage, mutateRequest } from "../lib/http";
+import { Checkbox } from "./Checkbox";
+import { Select } from "./Select";
+import { Spinner } from "./Spinner";
 
 // ── Wire shape (matches lark_kit::routing::Config) ──────────────────────────
 
@@ -128,7 +132,7 @@ export function RoutingEditor({ appName, eventOptions }: RoutingEditorProps) {
     return <p className="error">Failed to load: {errMessage(error)}</p>;
   }
   if (!edit) {
-    return <p className="muted">Loading…</p>;
+    return <Spinner />;
   }
 
   const onSave = async () => {
@@ -177,7 +181,7 @@ export function RoutingEditor({ appName, eventOptions }: RoutingEditorProps) {
             <span className="field-label">
               match <span className="muted">(exact, "group/*", or "*")</span>
             </span>
-            <input
+            <Input
               className="field-input"
               placeholder="group/*"
               value={rule.match}
@@ -203,10 +207,9 @@ export function RoutingEditor({ appName, eventOptions }: RoutingEditorProps) {
                   alignItems: "center",
                 }}
               >
-                <input
-                  type="checkbox"
+                <Checkbox
                   checked={rule.events.includes(opt.value)}
-                  onChange={() =>
+                  onCheckedChange={() =>
                     setEdit((s) =>
                       patchRule(s, rule.key, (r) => ({
                         ...r,
@@ -307,7 +310,7 @@ export function RoutingEditor({ appName, eventOptions }: RoutingEditorProps) {
       </div>
       {edit.user_map.map((m) => (
         <div key={m.key} className="filters" style={{ marginBottom: "0.4rem" }}>
-          <input
+          <Input
             className="field-input"
             placeholder="username"
             value={m.username}
@@ -320,7 +323,7 @@ export function RoutingEditor({ appName, eventOptions }: RoutingEditorProps) {
               )
             }
           />
-          <input
+          <Input
             className="field-input"
             placeholder="lark@email"
             value={m.lark_email}
@@ -373,7 +376,7 @@ export function RoutingEditor({ appName, eventOptions }: RoutingEditorProps) {
       {/* ── Alert labels ── */}
       <label className="field" style={{ marginTop: "1.5rem" }}>
         <span className="field-label">alert labels (comma-separated)</span>
-        <input
+        <Input
           className="field-input"
           placeholder="bug, urgent, p0"
           value={edit.alert_labels}
@@ -413,24 +416,23 @@ function DestinationList({
       <span className="field-label">destinations</span>
       {dests.map((d) => (
         <div key={d.key} className="filters" style={{ marginBottom: "0.4rem" }}>
-          <select
-            className="field-input"
+          <Select
+            className="field-input field-select"
             style={{ width: "auto" }}
             value={d.kind}
-            onChange={(e) =>
+            onValueChange={(v) =>
               onChange(
                 dests.map((x) =>
-                  x.key === d.key
-                    ? { ...x, kind: e.target.value as DestKind }
-                    : x,
+                  x.key === d.key ? { ...x, kind: v as DestKind } : x,
                 ),
               )
             }
-          >
-            <option value="chat">Group chat</option>
-            <option value="dm">Direct message</option>
-          </select>
-          <input
+            options={[
+              { value: "chat", label: "Group chat" },
+              { value: "dm", label: "Direct message" },
+            ]}
+          />
+          <Input
             className="field-input"
             list={d.kind === "chat" ? chatsListId : undefined}
             placeholder={d.kind === "chat" ? "chat_id (oc_…)" : "user@email"}

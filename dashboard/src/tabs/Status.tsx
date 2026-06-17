@@ -2,15 +2,18 @@ import { Switch } from "@base-ui/react/switch";
 import { useState } from "react";
 import { Link } from "react-router";
 import useSWR, { mutate } from "swr";
+import { Spinner } from "../components/Spinner";
 import { errMessage, mutateRequest } from "../lib/http";
 
-/// Apps that have a dedicated config page. Their card title links there; apps
-/// without one (e.g. preview-only integrations) render a plain, static title.
+/// Apps that have a dedicated config page. Their card title links there; any
+/// app without an entry here renders a plain, static title.
 const APP_ROUTES: Record<string, string> = {
   linear: "/linear",
   github: "/github",
   gitlab: "/gitlab",
+  x: "/x",
   standup: "/standup",
+  minutes: "/minutes",
 };
 
 type State = "starting" | "running" | "errored" | "stopped";
@@ -83,7 +86,7 @@ export function Status() {
       <h2>Apps</h2>
       {error && <p className="error">Failed to load: {errMessage(error)}</p>}
       {toggleError && <p className="error">{toggleError}</p>}
-      {!apps && <p>Loading…</p>}
+      {!apps && <Spinner />}
       {apps && apps.length === 0 && <p className="muted">no apps registered</p>}
       {apps && apps.length > 0 && (
         <div className="status-grid">
@@ -93,15 +96,22 @@ export function Status() {
               s?.state ?? (app.enabled ? "starting" : "stopped");
             const route = APP_ROUTES[app.name];
             return (
-              <article key={app.name} className={`status-card ${state}`}>
+              <article
+                key={app.name}
+                className={`status-card ${state}${route ? " linkable" : ""}`}
+              >
+                {/* Stretched link: the whole card navigates to the app's page,
+                    while the controls below sit above this overlay and stay
+                    clickable (avoids invalid <button>-inside-<a> nesting). */}
+                {route && (
+                  <Link
+                    className="status-card-link"
+                    to={route}
+                    aria-label={`open ${app.name} settings`}
+                  />
+                )}
                 <header>
-                  {route ? (
-                    <Link className="status-name link" to={route}>
-                      {app.name}
-                    </Link>
-                  ) : (
-                    <span className="status-name">{app.name}</span>
-                  )}
+                  <span className="status-name">{app.name}</span>
                   <div className="status-controls">
                     <span
                       className="status-pill"

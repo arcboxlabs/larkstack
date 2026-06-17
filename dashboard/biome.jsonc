@@ -15,7 +15,18 @@
   "linter": {
     "enabled": true,
     "rules": {
-      "preset": "recommended"
+      "preset": "recommended",
+      "a11y": {
+        // Our Base UI wrappers render the real control, so a <label> wrapping
+        // <Input>/<Checkbox> is correctly associated — Biome just can't see
+        // through the component boundary. Treat them as input components.
+        "noLabelWithoutControl": {
+          "level": "error",
+          "options": {
+            "inputComponents": ["Input", "Checkbox"]
+          }
+        }
+      }
     }
   },
   "javascript": {

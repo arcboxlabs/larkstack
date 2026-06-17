@@ -1,4 +1,5 @@
 import { Button } from "@base-ui/react/button";
+import { Field } from "@base-ui/react/field";
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import useSWR from "swr";
@@ -7,6 +8,7 @@ import {
   type LarkAppRow,
   RegisterLarkApp,
 } from "../components/RegisterLarkApp";
+import { Select } from "../components/Select";
 import { errMessage, mutateRequest } from "../lib/http";
 
 interface ConsoleAuth {
@@ -124,38 +126,37 @@ export function Setup() {
           <code className="setup-callback">{callbackUrl}</code>
 
           <div className="action-fields" style={{ marginTop: "1rem" }}>
-            <div className="field">
-              <label className="field-label" htmlFor="setup-lark-app">
+            <Field.Root className="field">
+              <Field.Label className="field-label" htmlFor="setup-lark-app">
                 sign in with
-              </label>
-              <select
+              </Field.Label>
+              <Select
                 id="setup-lark-app"
-                className="field-input"
+                className="field-input field-select"
                 value={larkApp}
-                onChange={(e) => setLarkApp(e.target.value)}
+                onValueChange={setLarkApp}
                 disabled={!hasApp}
-              >
-                {!hasApp && <option value="">register an app first</option>}
-                {apps.map((a) => (
-                  <option key={a.name} value={a.name}>
-                    {a.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="field">
-              <label className="field-label" htmlFor="setup-admins">
+                options={
+                  hasApp
+                    ? apps.map((a) => ({ value: a.name, label: a.name }))
+                    : [{ value: "", label: "register an app first" }]
+                }
+              />
+            </Field.Root>
+            <Field.Root className="field">
+              <Field.Label className="field-label" htmlFor="setup-admins">
                 admin emails
-              </label>
-              <textarea
+              </Field.Label>
+              <Field.Control
                 id="setup-admins"
                 className="field-input setup-admins"
                 placeholder="you@example.com, teammate@example.com"
                 value={admins}
                 onChange={(e) => setAdmins(e.target.value)}
                 disabled={!hasApp}
+                render={<textarea />}
               />
-            </div>
+            </Field.Root>
           </div>
           <p className="muted help-text">
             Only these Lark accounts may sign in. <strong>Leave empty</strong>{" "}
