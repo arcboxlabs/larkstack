@@ -136,8 +136,32 @@ th {
 }
 
 .status-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
   font-family: ui-monospace, "SF Mono", Menlo, monospace;
   font-size: 0.9rem;
+}
+
+/* Brand logo (simple-icons) sits flush-left of the app name; it inherits the
+   text color so it stays visible in both light and dark themes. */
+.status-logo {
+  flex: none;
+}
+
+/* Fallback for apps with no third-party brand: a neutral monogram tile. */
+.status-logo-mono {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  font-family: system-ui, sans-serif;
+  font-size: 0.68rem;
+  font-weight: 700;
+  background: color-mix(in srgb, canvastext 14%, transparent);
+  color: color-mix(in srgb, canvastext 75%, transparent);
 }
 
 /* Stretched link covering the whole card; controls override it (see below). */

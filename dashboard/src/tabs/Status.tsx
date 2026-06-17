@@ -1,4 +1,11 @@
 import { Switch } from "@base-ui/react/switch";
+import {
+  type IconType,
+  SiGithub,
+  SiGitlab,
+  SiLinear,
+  SiX,
+} from "@icons-pack/react-simple-icons";
 import { useState } from "react";
 import { Link } from "react-router";
 import useSWR, { mutate } from "swr";
@@ -15,6 +22,34 @@ const APP_ROUTES: Record<string, string> = {
   standup: "/standup",
   minutes: "/minutes",
 };
+
+/// Proper-cased product names + brand logos (simple-icons) for the registered
+/// apps. Our own automations have no third-party brand, so they carry only a
+/// label and fall back to a monogram tile. Unknown apps render their raw name.
+const APP_BRANDS: Record<string, { label: string; Icon?: IconType }> = {
+  linear: { label: "Linear", Icon: SiLinear },
+  github: { label: "GitHub", Icon: SiGithub },
+  gitlab: { label: "GitLab", Icon: SiGitlab },
+  x: { label: "X", Icon: SiX },
+  standup: { label: "Standup" },
+  minutes: { label: "Minutes" },
+};
+
+function appLabel(name: string): string {
+  return APP_BRANDS[name]?.label ?? name;
+}
+
+/// The app's brand logo, or — for our own automations — a neutral monogram tile
+/// of the label's first letter. Icons inherit the text color (theme-adaptive).
+function AppLogo({ name }: { name: string }) {
+  const Icon = APP_BRANDS[name]?.Icon;
+  if (Icon) return <Icon className="status-logo" size={18} aria-hidden />;
+  return (
+    <span className="status-logo status-logo-mono" aria-hidden>
+      {appLabel(name).charAt(0).toUpperCase()}
+    </span>
+  );
+}
 
 type State = "starting" | "running" | "errored" | "stopped";
 
@@ -107,11 +142,14 @@ export function Status() {
                   <Link
                     className="status-card-link"
                     to={route}
-                    aria-label={`open ${app.name} settings`}
+                    aria-label={`open ${appLabel(app.name)} settings`}
                   />
                 )}
                 <header>
-                  <span className="status-name">{app.name}</span>
+                  <span className="status-name">
+                    <AppLogo name={app.name} />
+                    {appLabel(app.name)}
+                  </span>
                   <div className="status-controls">
                     <span
                       className="status-pill"
@@ -127,7 +165,7 @@ export function Status() {
                       checked={app.enabled}
                       disabled={pending === app.name}
                       onCheckedChange={(checked) => onToggle(app.name, checked)}
-                      aria-label={`${app.enabled ? "disable" : "enable"} ${app.name}`}
+                      aria-label={`${app.enabled ? "disable" : "enable"} ${appLabel(app.name)}`}
                     >
                       <Switch.Thumb className="switch-thumb" />
                     </Switch.Root>
