@@ -366,6 +366,14 @@ th {
   margin-bottom: 0.85rem;
 }
 
+/* Stacked cards on the app pages (binding card + settings/routing cards, direct
+   children of the page <section>) need breathing room between them. Scoped to
+   `section >` so the Actions tab's `.action-cards` grid — which already has its
+   own `gap` — isn't double-spaced, and nested rule cards aren't affected. */
+section > .action-card + .action-card {
+  margin-top: 0.75rem;
+}
+
 .action-card-head {
   display: flex;
   align-items: flex-start;
