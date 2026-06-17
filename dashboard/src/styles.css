@@ -355,6 +355,17 @@ th {
   background: color-mix(in srgb, canvastext 3%, transparent);
 }
 
+/* The Lark-app binding card auto-saves on change, so it has no bottom button
+   row to give it rhythm — its single full-width control would otherwise hug the
+   card edge. Add symmetric vertical room around the field. */
+.binding-card {
+  padding: 1rem;
+}
+
+.binding-card .help-text {
+  margin-bottom: 0.85rem;
+}
+
 .action-card-head {
   display: flex;
   align-items: flex-start;
@@ -681,11 +692,16 @@ textarea.setup-admins {
   gap: 0.6rem;
 }
 
+/* Toggle track: a flex row so the thumb is vertically centered and the inset
+   padding alone fixes its left/right rest positions (translateX only animates). */
 .switch {
   position: relative;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
   width: 2.1rem;
   height: 1.15rem;
-  padding: 0;
+  padding: 0 0.13rem;
   border: none;
   border-radius: 999px;
   background: color-mix(in srgb, canvastext 25%, transparent);
@@ -704,17 +720,17 @@ textarea.setup-admins {
 }
 
 .switch-thumb {
-  display: block;
   width: 0.9rem;
   height: 0.9rem;
   border-radius: 50%;
   background: canvas;
-  transform: translateX(0.15rem);
+  transform: translateX(0);
   transition: transform 0.15s;
 }
 
+/* Inner track width = 2.1 − 2×0.13 = 1.84rem; thumb 0.9rem → slide 0.94rem. */
 .switch[data-checked] .switch-thumb {
-  transform: translateX(1.05rem);
+  transform: translateX(0.94rem);
 }
 
 /* Base UI Checkbox */

@@ -61,7 +61,7 @@ export function LarkBinding({ appName }: { appName: string }) {
   };
 
   return (
-    <div className="action-card">
+    <div className="action-card binding-card">
       <div className="actions-subsystem">Lark app</div>
       <p className="muted help-text">
         The Lark credentials this app delivers with. Manage the registry in the{" "}
