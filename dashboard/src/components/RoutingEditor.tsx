@@ -1,11 +1,9 @@
-import { Button } from "@base-ui/react/button";
 import { Combobox } from "@base-ui/react/combobox";
 import { Input } from "@base-ui/react/input";
 import { useEffect, useRef, useState } from "react";
 import useSWR from "swr";
 import useSWRMutation from "swr/mutation";
 import { errMessage, mutateRequest } from "../lib/http";
-import { Checkbox } from "./Checkbox";
 import { Select } from "./Select";
 import { Spinner } from "./Spinner";
 
@@ -168,170 +166,193 @@ export function RoutingEditor({
 
   const newDest = (): DestRow => ({ key: nextKey(), kind: "chat", target: "" });
 
+  const addRule = () =>
+    setEdit((s) =>
+      s
+        ? {
+            ...s,
+            rules: [
+              ...s.rules,
+              {
+                key: nextKey(),
+                match: "",
+                events: [],
+                destinations: [newDest()],
+              },
+            ],
+          }
+        : s,
+    );
+  const removeRule = (key: number) =>
+    setEdit((s) =>
+      s ? { ...s, rules: s.rules.filter((r) => r.key !== key) } : s,
+    );
+
   return (
-    <div className="action-card">
-      <p className="muted help-text">
+    <div className="action-card routing-editor">
+      <p className="routing-lead">
         Route events to Lark group chats or DMs — pick from the bot's chats and
-        users, or type a <code>chat_id</code> / email. Changes apply live — no
+        users, or type a <code>chat_id</code> / email. Changes apply live, no
         restart. Delivery needs a bound <code>lark_app</code> bot.
       </p>
 
       {/* ── Rules ── */}
-      <div className="actions-subsystem">routing rules</div>
-      {edit.rules.length === 0 && (
-        <p className="muted help-text">
-          No rules yet — unmatched events use the defaults below.
-        </p>
-      )}
-      {edit.rules.map((rule) => (
-        <div
-          key={rule.key}
-          className="action-card"
-          style={{ marginBottom: "0.75rem" }}
-        >
-          <label className="field">
-            <span className="field-label">
-              match <span className="muted">(exact, "group/*", or "*")</span>
-            </span>
-            <Input
-              className="field-input"
-              placeholder="group/*"
-              value={rule.match}
-              onChange={(e) =>
+      <section className="routing-section">
+        <div className="routing-section-head">
+          <span className="routing-section-title">Routing rules</span>
+          <span className="routing-section-hint">
+            every matching rule contributes its destinations
+          </span>
+        </div>
+
+        {edit.rules.length === 0 && (
+          <p className="routing-empty">
+            No rules yet — unmatched events fall through to the defaults below.
+          </p>
+        )}
+
+        {edit.rules.map((rule, i) => (
+          <div key={rule.key} className="routing-rule">
+            <div className="routing-rule-head">
+              <span className="routing-rule-badge">Rule {i + 1}</span>
+              <button
+                type="button"
+                className="routing-remove-rule"
+                onClick={() => removeRule(rule.key)}
+              >
+                Remove
+              </button>
+            </div>
+
+            <div className="routing-field">
+              <label
+                className="routing-field-label"
+                htmlFor={`match-${rule.key}`}
+              >
+                Match
+                <span className="routing-field-hint">
+                  exact, “group/*”, or “*” for all
+                </span>
+              </label>
+              <Input
+                id={`match-${rule.key}`}
+                className="routing-input"
+                placeholder="group/*"
+                value={rule.match}
+                onChange={(e) =>
+                  setEdit((s) =>
+                    patchRule(s, rule.key, (r) => ({
+                      ...r,
+                      match: e.target.value,
+                    })),
+                  )
+                }
+              />
+            </div>
+
+            <div className="routing-field">
+              <span className="routing-field-label">
+                Events
+                <span className="routing-field-hint">none selected = all</span>
+              </span>
+              <div className="routing-chips">
+                {eventOptions.map((opt) => {
+                  const active = rule.events.includes(opt.value);
+                  return (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      className="routing-chip"
+                      data-active={active}
+                      aria-pressed={active}
+                      onClick={() =>
+                        setEdit((s) =>
+                          patchRule(s, rule.key, (r) => ({
+                            ...r,
+                            events: toggle(r.events, opt.value),
+                          })),
+                        )
+                      }
+                    >
+                      {active && <span className="routing-chip-check">✓</span>}
+                      {opt.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <DestinationList
+              dests={rule.destinations}
+              chats={chats}
+              users={users}
+              onChange={(ds) =>
+                setEdit((s) =>
+                  patchRule(s, rule.key, (r) => ({ ...r, destinations: ds })),
+                )
+              }
+              onAdd={() =>
                 setEdit((s) =>
                   patchRule(s, rule.key, (r) => ({
                     ...r,
-                    match: e.target.value,
+                    destinations: [...r.destinations, newDest()],
                   })),
                 )
               }
             />
-          </label>
-
-          <span className="field-label">events (none = all)</span>
-          <div className="filters" style={{ flexWrap: "wrap", gap: "0.75rem" }}>
-            {eventOptions.map((opt) => (
-              <label
-                key={opt.value}
-                style={{
-                  display: "flex",
-                  gap: "0.35rem",
-                  alignItems: "center",
-                }}
-              >
-                <Checkbox
-                  checked={rule.events.includes(opt.value)}
-                  onCheckedChange={() =>
-                    setEdit((s) =>
-                      patchRule(s, rule.key, (r) => ({
-                        ...r,
-                        events: toggle(r.events, opt.value),
-                      })),
-                    )
-                  }
-                />
-                {opt.label}
-              </label>
-            ))}
           </div>
+        ))}
 
-          <DestinationList
-            dests={rule.destinations}
-            chats={chats}
-            users={users}
-            onChange={(ds) =>
-              setEdit((s) =>
-                patchRule(s, rule.key, (r) => ({ ...r, destinations: ds })),
-              )
-            }
-            onAdd={() =>
-              setEdit((s) =>
-                patchRule(s, rule.key, (r) => ({
-                  ...r,
-                  destinations: [...r.destinations, newDest()],
-                })),
-              )
-            }
-          />
-
-          <div className="filters" style={{ marginTop: "0.5rem" }}>
-            <Button
-              type="button"
-              className="action-btn error"
-              onClick={() =>
-                setEdit((s) =>
-                  s
-                    ? { ...s, rules: s.rules.filter((r) => r.key !== rule.key) }
-                    : s,
-                )
-              }
-            >
-              Remove rule
-            </Button>
-          </div>
-        </div>
-      ))}
-      <Button
-        type="button"
-        onClick={() =>
-          setEdit((s) =>
-            s
-              ? {
-                  ...s,
-                  rules: [
-                    ...s.rules,
-                    {
-                      key: nextKey(),
-                      match: "",
-                      events: [],
-                      destinations: [newDest()],
-                    },
-                  ],
-                }
-              : s,
-          )
-        }
-      >
-        Add rule
-      </Button>
+        <button type="button" className="routing-add" onClick={addRule}>
+          <span className="routing-add-icon">+</span> Add rule
+        </button>
+      </section>
 
       {/* ── Default destinations ── */}
-      <div className="actions-subsystem" style={{ marginTop: "1.5rem" }}>
-        default destinations (unmatched events — empty = drop)
-      </div>
-      <DestinationList
-        dests={edit.default_destinations}
-        chats={chats}
-        users={users}
-        onChange={(ds) =>
-          setEdit((s) => (s ? { ...s, default_destinations: ds } : s))
-        }
-        onAdd={() =>
-          setEdit((s) =>
-            s
-              ? {
-                  ...s,
-                  default_destinations: [...s.default_destinations, newDest()],
-                }
-              : s,
-          )
-        }
-      />
+      <section className="routing-section">
+        <div className="routing-section-head">
+          <span className="routing-section-title">Default destinations</span>
+          <span className="routing-section-hint">
+            used when no rule matches — empty drops the event
+          </span>
+        </div>
+        <DestinationList
+          dests={edit.default_destinations}
+          chats={chats}
+          users={users}
+          hideLabel
+          onChange={(ds) =>
+            setEdit((s) => (s ? { ...s, default_destinations: ds } : s))
+          }
+          onAdd={() =>
+            setEdit((s) =>
+              s
+                ? {
+                    ...s,
+                    default_destinations: [
+                      ...s.default_destinations,
+                      newDest(),
+                    ],
+                  }
+                : s,
+            )
+          }
+        />
+      </section>
 
       {/* ── Reviewer user map ── */}
       {showUserMap && (
-        <>
-          <div className="actions-subsystem" style={{ marginTop: "1.5rem" }}>
-            reviewer user map (source username → Lark email)
+        <section className="routing-section">
+          <div className="routing-section-head">
+            <span className="routing-section-title">Reviewer user map</span>
+            <span className="routing-section-hint">
+              source username → Lark email
+            </span>
           </div>
           {edit.user_map.map((m) => (
-            <div
-              key={m.key}
-              className="filters"
-              style={{ marginBottom: "0.4rem" }}
-            >
+            <div key={m.key} className="routing-dest">
               <Input
-                className="field-input"
+                className="routing-input"
                 placeholder="username"
                 value={m.username}
                 onChange={(e) =>
@@ -343,8 +364,9 @@ export function RoutingEditor({
                   )
                 }
               />
+              <span className="routing-arrow">→</span>
               <Input
-                className="field-input"
+                className="routing-input"
                 placeholder="lark@email"
                 value={m.lark_email}
                 onChange={(e) =>
@@ -356,9 +378,10 @@ export function RoutingEditor({
                   )
                 }
               />
-              <Button
+              <button
                 type="button"
-                className="action-btn error"
+                className="routing-icon-btn"
+                aria-label="Remove mapping"
                 onClick={() =>
                   setEdit((s) =>
                     s
@@ -370,12 +393,13 @@ export function RoutingEditor({
                   )
                 }
               >
-                Remove
-              </Button>
+                ×
+              </button>
             </div>
           ))}
-          <Button
+          <button
             type="button"
+            className="routing-add subtle"
             onClick={() =>
               setEdit((s) =>
                 s
@@ -390,32 +414,43 @@ export function RoutingEditor({
               )
             }
           >
-            Add mapping
-          </Button>
-        </>
+            <span className="routing-add-icon">+</span> Add mapping
+          </button>
+        </section>
       )}
 
       {/* ── Alert labels ── */}
       {showAlertLabels && (
-        <label className="field" style={{ marginTop: "1.5rem" }}>
-          <span className="field-label">alert labels (comma-separated)</span>
+        <section className="routing-section">
+          <div className="routing-section-head">
+            <span className="routing-section-title">Alert labels</span>
+            <span className="routing-section-hint">
+              comma-separated; these labels trigger an alert card
+            </span>
+          </div>
           <Input
-            className="field-input"
+            className="routing-input"
+            style={{ width: "100%" }}
             placeholder="bug, urgent, p0"
             value={edit.alert_labels}
             onChange={(e) =>
               setEdit((s) => (s ? { ...s, alert_labels: e.target.value } : s))
             }
           />
-        </label>
+        </section>
       )}
 
-      <div className="filters" style={{ marginTop: "1rem" }}>
-        <Button type="button" onClick={onSave} disabled={save.isMutating}>
+      <div className="routing-footer">
+        <button
+          type="button"
+          className="routing-save"
+          onClick={onSave}
+          disabled={save.isMutating}
+        >
           {save.isMutating ? "Saving…" : "Save routing"}
-        </Button>
+        </button>
         {feedback && (
-          <span className={`action-result ${feedback.tone}`}>
+          <span className={`routing-feedback ${feedback.tone}`}>
             {feedback.text}
           </span>
         )}
@@ -430,12 +465,15 @@ function DestinationList({
   users,
   onChange,
   onAdd,
+  hideLabel = false,
 }: {
   dests: DestRow[];
   chats: Chat[] | undefined;
   users: User[] | undefined;
   onChange: (ds: DestRow[]) => void;
   onAdd: () => void;
+  /** Omit the "Destinations" sub-label (the section header already names it). */
+  hideLabel?: boolean;
 }) {
   const patch = (key: number, fn: (d: DestRow) => DestRow) =>
     onChange(dests.map((x) => (x.key === key ? fn(x) : x)));
@@ -443,13 +481,12 @@ function DestinationList({
   const chatItems = chats?.map((c) => ({ value: c.chat_id, label: c.name }));
   const userItems = users?.map((u) => ({ value: u.open_id, label: u.name }));
   return (
-    <div style={{ marginTop: "0.5rem" }}>
-      <span className="field-label">destinations</span>
+    <div className="routing-dests">
+      {!hideLabel && <span className="routing-dest-label">Destinations</span>}
       {dests.map((d) => (
-        <div key={d.key} className="filters" style={{ marginBottom: "0.4rem" }}>
+        <div key={d.key} className="routing-dest">
           <Select
-            className="field-input field-select"
-            style={{ width: "auto" }}
+            className="routing-kind select-trigger"
             value={d.kind}
             onValueChange={(v) =>
               // Switching kind clears the target — a chat_id and a user id aren't
@@ -475,18 +512,19 @@ function DestinationList({
               d.kind === "chat" ? "No matching chats" : "No matching users"
             }
           />
-          <Button
+          <button
             type="button"
-            className="action-btn error"
+            className="routing-icon-btn"
+            aria-label="Remove destination"
             onClick={() => onChange(dests.filter((x) => x.key !== d.key))}
           >
-            Remove
-          </Button>
+            ×
+          </button>
         </div>
       ))}
-      <Button type="button" className="action-btn" onClick={onAdd}>
-        Add destination
-      </Button>
+      <button type="button" className="routing-add subtle" onClick={onAdd}>
+        <span className="routing-add-icon">+</span> Add destination
+      </button>
     </div>
   );
 }
@@ -524,7 +562,7 @@ function PickerField({
   if (!items || items.length === 0) {
     return (
       <Input
-        className="field-input"
+        className="routing-input"
         placeholder={manualPlaceholder}
         value={value}
         onChange={(e) => onChange(e.target.value)}
@@ -552,7 +590,7 @@ function PickerField({
     >
       <span className="combobox-control">
         <Combobox.Input
-          className="field-input combobox-input"
+          className="routing-input combobox-input"
           placeholder={searchPlaceholder}
         />
         <Combobox.Trigger className="combobox-trigger" aria-label="Open">
