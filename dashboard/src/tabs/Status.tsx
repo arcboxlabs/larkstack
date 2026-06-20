@@ -74,13 +74,6 @@ interface AppsResponse {
   apps: AppManifest[];
 }
 
-const STATE_COLORS: Record<State, string> = {
-  starting: "#888",
-  running: "#22c55e",
-  errored: "#ef4444",
-  stopped: "#6b7280",
-};
-
 function freshness(ms: number): string {
   const dt = Date.now() - ms;
   if (dt < 1000) return "just now";
@@ -151,15 +144,9 @@ export function Status() {
                     {appLabel(app.name)}
                   </span>
                   <div className="status-controls">
-                    <span
-                      className="status-pill"
-                      style={{
-                        color: STATE_COLORS[state],
-                        borderColor: STATE_COLORS[state],
-                      }}
-                    >
-                      {state}
-                    </span>
+                    {/* Pill color comes from the card's state class (CSS) so it
+                        stays in the design palette — no inline hex. */}
+                    <span className="status-pill">{state}</span>
                     <Switch.Root
                       className="switch"
                       checked={app.enabled}

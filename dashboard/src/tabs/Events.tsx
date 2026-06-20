@@ -11,12 +11,14 @@ const LEVEL_ORDER: Record<Level, number> = {
   error: 4,
 };
 
+// Log-level ink, drawn from the design palette (semantic tokens, not the
+// in-product timeline pastels). trace/debug stay quiet; info/warn/error escalate.
 const LEVEL_COLORS: Record<Level, string> = {
-  trace: "#6b7280",
-  debug: "#3b82f6",
-  info: "#22c55e",
-  warn: "#f59e0b",
-  error: "#ef4444",
+  trace: "var(--muted-soft)",
+  debug: "var(--muted)",
+  info: "var(--success)",
+  warn: "var(--warning)",
+  error: "var(--error)",
 };
 
 const LEVELS: ReadonlyArray<{ value: Level; label: string }> = [
