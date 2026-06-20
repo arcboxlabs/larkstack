@@ -60,3 +60,27 @@ pub async fn lark_event_handler(
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use axum::body::Bytes;
+    use axum::http::StatusCode;
+    use serde_json::json;
+
+    use super::lark_event_handler;
+    use crate::routes::test_support::live_state;
+
+    #[tokio::test]
+    async fn lark_url_verification_echoes_the_challenge() {
+        let body =
+            Bytes::from(r#"{"type":"url_verification","challenge":"test-challenge-token-123"}"#);
+
+        let (status, response) = lark_event_handler(live_state().await, body).await;
+
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(
+            response.0,
+            json!({ "challenge": "test-challenge-token-123" })
+        );
+    }
+}

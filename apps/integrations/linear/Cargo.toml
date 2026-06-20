@@ -25,3 +25,8 @@ larkstack-core = { path = "../../../crates/larkstack-core" }
 lark-kit = { path = "../../../crates/lark-kit" }
 chrono = { version = "0.4.45", default-features = false, features = ["clock"] }
 chrono-tz = { version = "0.10.4", default-features = false }
+
+[dev-dependencies]
+hex = "0.4"
+hmac = "0.12"
+sha2 = "0.10"

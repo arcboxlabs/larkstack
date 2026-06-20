@@ -302,3 +302,104 @@ fn issue_to_notification(
         changes,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use axum::body::Bytes;
+    use axum::http::{HeaderMap, HeaderValue, StatusCode};
+
+    use super::webhook_handler;
+    use crate::routes::test_support::{linear_signature, live_state};
+
+    #[tokio::test]
+    async fn webhook_without_signature_is_rejected() {
+        let status = webhook_handler(live_state().await, HeaderMap::new(), Bytes::from("{}")).await;
+
+        assert_eq!(status, StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn webhook_with_wrong_signature_is_rejected() {
+        let mut headers = HeaderMap::new();
+        headers.insert("linear-signature", HeaderValue::from_static("deadbeef"));
+
+        let status = webhook_handler(live_state().await, headers, Bytes::from("{}")).await;
+
+        assert_eq!(status, StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn signed_malformed_json_is_rejected() {
+        let payload = "{";
+        let headers = signed_headers(payload);
+
+        let status = webhook_handler(live_state().await, headers, Bytes::from(payload)).await;
+
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn ignored_linear_events_are_accepted_without_notification_work() {
+        let payload = r#"{"action":"delete","type":"Issue","url":"https://linear.app/test","data":{"id":"fake-001","title":"Ignored","priority":0,"identifier":"TEST-0","state":{"name":"Triage"},"assignee":null}}"#;
+
+        let status = webhook_handler(
+            live_state().await,
+            signed_headers(payload),
+            Bytes::from(payload),
+        )
+        .await;
+
+        assert_eq!(status, StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn signed_issue_create_is_accepted() {
+        let payload = r#"{"action":"create","type":"Issue","url":"https://linear.app/team/issue/TEST-1/auth-500","data":{"id":"fake-002","title":"Auth service returns 500 on login","priority":1,"identifier":"TEST-1","state":{"name":"In Progress"},"assignee":null,"description":"Users are seeing 500 errors when attempting to log in."}}"#;
+
+        let status = webhook_handler(
+            live_state().await,
+            signed_headers(payload),
+            Bytes::from(payload),
+        )
+        .await;
+
+        assert_eq!(status, StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn signed_issue_update_is_accepted() {
+        let payload = r#"{"action":"update","type":"Issue","url":"https://linear.app/team/issue/TEST-2/update-dashboard","updatedFrom":{"state":{"name":"Todo"},"priority":4},"data":{"id":"fake-003","title":"Update dashboard layout","priority":3,"identifier":"TEST-2","state":{"name":"In Progress"},"assignee":null,"description":null}}"#;
+
+        let status = webhook_handler(
+            live_state().await,
+            signed_headers(payload),
+            Bytes::from(payload),
+        )
+        .await;
+
+        assert_eq!(status, StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn signed_comment_create_is_accepted() {
+        let payload = r#"{"action":"create","type":"Comment","url":"https://linear.app/team/issue/TEST-1/auth-500#comment-abc","data":{"id":"comment-001","body":"I investigated this and found a missing null check.","issue":{"identifier":"TEST-1","title":"Auth service returns 500 on login"},"user":{"name":"Senior Dev","email":"senior@example.com"}}}"#;
+
+        let status = webhook_handler(
+            live_state().await,
+            signed_headers(payload),
+            Bytes::from(payload),
+        )
+        .await;
+
+        assert_eq!(status, StatusCode::OK);
+    }
+
+    fn signed_headers(payload: &str) -> HeaderMap {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            "linear-signature",
+            HeaderValue::from_str(&linear_signature(payload)).expect("signature is header-safe"),
+        );
+        headers
+    }
+}
