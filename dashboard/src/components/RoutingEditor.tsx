@@ -1,5 +1,8 @@
+import { Button } from "@base-ui/react/button";
 import { Combobox } from "@base-ui/react/combobox";
 import { Input } from "@base-ui/react/input";
+import { Toggle } from "@base-ui/react/toggle";
+import { ToggleGroup } from "@base-ui/react/toggle-group";
 import { useEffect, useRef, useState } from "react";
 import useSWR from "swr";
 import useSWRMutation from "swr/mutation";
@@ -215,13 +218,13 @@ export function RoutingEditor({
           <div key={rule.key} className="routing-rule">
             <div className="routing-rule-head">
               <span className="routing-rule-badge">Rule {i + 1}</span>
-              <button
+              <Button
                 type="button"
                 className="routing-remove-rule"
                 onClick={() => removeRule(rule.key)}
               >
                 Remove
-              </button>
+              </Button>
             </div>
 
             <div className="routing-field">
@@ -255,31 +258,28 @@ export function RoutingEditor({
                 Events
                 <span className="routing-field-hint">none selected = all</span>
               </span>
-              <div className="routing-chips">
-                {eventOptions.map((opt) => {
-                  const active = rule.events.includes(opt.value);
-                  return (
-                    <button
-                      key={opt.value}
-                      type="button"
-                      className="routing-chip"
-                      data-active={active}
-                      aria-pressed={active}
-                      onClick={() =>
-                        setEdit((s) =>
-                          patchRule(s, rule.key, (r) => ({
-                            ...r,
-                            events: toggle(r.events, opt.value),
-                          })),
-                        )
-                      }
-                    >
-                      {active && <span className="routing-chip-check">✓</span>}
-                      {opt.label}
-                    </button>
-                  );
-                })}
-              </div>
+              <ToggleGroup
+                className="routing-chips"
+                multiple
+                value={rule.events}
+                onValueChange={(events) =>
+                  setEdit((s) =>
+                    patchRule(s, rule.key, (r) => ({ ...r, events })),
+                  )
+                }
+              >
+                {eventOptions.map((opt) => (
+                  <Toggle
+                    key={opt.value}
+                    value={opt.value}
+                    className="routing-chip"
+                    aria-label={opt.label}
+                  >
+                    <span className="routing-chip-check">✓</span>
+                    {opt.label}
+                  </Toggle>
+                ))}
+              </ToggleGroup>
             </div>
 
             <DestinationList
@@ -303,9 +303,9 @@ export function RoutingEditor({
           </div>
         ))}
 
-        <button type="button" className="routing-add" onClick={addRule}>
+        <Button type="button" className="routing-add" onClick={addRule}>
           <span className="routing-add-icon">+</span> Add rule
-        </button>
+        </Button>
       </section>
 
       {/* ── Default destinations ── */}
@@ -378,7 +378,7 @@ export function RoutingEditor({
                   )
                 }
               />
-              <button
+              <Button
                 type="button"
                 className="routing-icon-btn"
                 aria-label="Remove mapping"
@@ -394,10 +394,10 @@ export function RoutingEditor({
                 }
               >
                 ×
-              </button>
+              </Button>
             </div>
           ))}
-          <button
+          <Button
             type="button"
             className="routing-add subtle"
             onClick={() =>
@@ -415,7 +415,7 @@ export function RoutingEditor({
             }
           >
             <span className="routing-add-icon">+</span> Add mapping
-          </button>
+          </Button>
         </section>
       )}
 
@@ -441,14 +441,14 @@ export function RoutingEditor({
       )}
 
       <div className="routing-footer">
-        <button
+        <Button
           type="button"
           className="routing-save"
           onClick={onSave}
           disabled={save.isMutating}
         >
           {save.isMutating ? "Saving…" : "Save routing"}
-        </button>
+        </Button>
         {feedback && (
           <span className={`routing-feedback ${feedback.tone}`}>
             {feedback.text}
@@ -512,19 +512,19 @@ function DestinationList({
               d.kind === "chat" ? "No matching chats" : "No matching users"
             }
           />
-          <button
+          <Button
             type="button"
             className="routing-icon-btn"
             aria-label="Remove destination"
             onClick={() => onChange(dests.filter((x) => x.key !== d.key))}
           >
             ×
-          </button>
+          </Button>
         </div>
       ))}
-      <button type="button" className="routing-add subtle" onClick={onAdd}>
+      <Button type="button" className="routing-add subtle" onClick={onAdd}>
         <span className="routing-add-icon">+</span> Add destination
-      </button>
+      </Button>
     </div>
   );
 }
@@ -628,12 +628,6 @@ function PickerField({
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
-
-function toggle(list: string[], value: string): string[] {
-  return list.includes(value)
-    ? list.filter((v) => v !== value)
-    : [...list, value];
-}
 
 function patchRule(
   s: EditState | null,

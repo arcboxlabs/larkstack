@@ -1206,15 +1206,23 @@ textarea.setup-admins {
   color: var(--ink);
 }
 
-.routing-chip[data-active="true"] {
+/* Base UI Toggle marks the pressed state with data-pressed. */
+.routing-chip[data-pressed] {
   background: var(--ink);
   color: var(--canvas);
   border-color: var(--ink);
 }
 
+/* The check glyph always renders; it shows only while the chip is pressed so the
+   flex gap collapses cleanly when hidden (display:none drops it from layout). */
 .routing-chip-check {
+  display: none;
   font-size: 0.68rem;
   margin-left: -0.1rem;
+}
+
+.routing-chip[data-pressed] .routing-chip-check {
+  display: inline-flex;
 }
 
 /* Destination / mapping rows — aligned flex: kind, target (grows), remove. */
