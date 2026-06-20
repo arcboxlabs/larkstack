@@ -38,20 +38,7 @@
   scripts.update-linear-schema = {
     description = "Refresh apps/integrations/linear/graphql/schema.graphql from Linear's SDK";
     exec = ''
-      set -euo pipefail
-      root="$(git rev-parse --show-toplevel)"
-      dest="$root/apps/integrations/linear/graphql/schema.graphql"
-      url="https://raw.githubusercontent.com/linear/linear/master/packages/sdk/src/schema.graphql"
-      tmp="$(mktemp)"
-      {
-        echo "# Linear GraphQL schema — generated, DO NOT EDIT BY HAND."
-        echo "# Source: https://github.com/linear/linear/blob/master/packages/sdk/src/schema.graphql"
-        echo "# Refresh: run the update-linear-schema devenv script, then commit."
-        echo
-        curl -fsSL "$url"
-      } > "$tmp"
-      mv "$tmp" "$dest"
-      echo "updated $dest ($(wc -l < "$dest") lines)"
+      cargo xtask update-linear-schema
     '';
   };
 

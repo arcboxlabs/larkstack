@@ -116,8 +116,9 @@ Needs `LINEAR_API_KEY`.
   (`type TimelessDate = String; type TimelessDateOrDuration = String;`) — that's
   how `graphql_client` resolves them. All ops share one generic `run::<Q>` helper.
 - `graphql/schema.graphql` is a **pinned lock** (Linear's published SDL, ~1.2 MB).
-  Builds read it offline. Refresh it deliberately with the **`update-linear-schema`**
-  devenv script (pulls Linear's SDK SDL), then commit — never hand-edit.
+  Builds read it offline. Refresh it deliberately with
+  **`cargo xtask update-linear-schema`** (pulls Linear's SDK SDL), then commit —
+  never hand-edit.
 - Responses are hand-mapped to small projections (`LinearIssueData`, `DueIssue`,
   `IssueSubscriberInfo`, `LinearUser`) so `lark::cards`/`scheduler` never depend on
   generated types.
@@ -156,5 +157,5 @@ from the console's **Linear** tab (no restart).
 cargo build -p linear
 cargo clippy -p linear --all-targets -- -D warnings
 cargo test -p linear
-update-linear-schema           # refresh graphql/schema.graphql (in the devenv shell)
+cargo xtask update-linear-schema  # refresh graphql/schema.graphql
 ```

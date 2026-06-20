@@ -1,6 +1,6 @@
 # Linear GraphQL schema — generated, DO NOT EDIT BY HAND.
 # Source: https://github.com/linear/linear/blob/master/packages/sdk/src/schema.graphql
-# Refresh: run the update-linear-schema devenv script, then commit.
+# Refresh: run `cargo xtask update-linear-schema`, then commit.
 
 schema {
   query: Query
