@@ -1,12 +1,37 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use lark_kit::routing::{RoutingEvent, RoutingFeatures, RoutingSpec, SubjectSpec};
 use lark_kit::{LarkBotClient, SlotGuard, StateSlot};
 use larkstack_core::{ActionSpec, App, AppServices, Instance, Kind, Manifest};
 use serde_json::Value;
 use tokio_util::sync::CancellationToken;
 
 use crate::config::AppState;
+
+const ROUTING_EVENTS: &[RoutingEvent] = &[
+    RoutingEvent {
+        value: "issue",
+        label: "Issues (create / update)",
+        description: "Linear issue creation and updates",
+    },
+    RoutingEvent {
+        value: "comment",
+        label: "Comments",
+        description: "New Linear issue comments",
+    },
+];
+
+const ROUTING_SPEC: RoutingSpec = RoutingSpec {
+    namespace: "linear",
+    subject: SubjectSpec {
+        label: "Team key",
+        placeholder: "ENG",
+        help: "Linear routes by issue identifier prefix, e.g. ENG from ENG-123.",
+    },
+    events: ROUTING_EVENTS,
+    features: RoutingFeatures::ROUTING_ONLY,
+};
 
 /// The registered App for the console host.
 pub fn app() -> Arc<dyn App> {
@@ -64,7 +89,7 @@ impl App for LinearApp {
     /// live notification routing config (rules → chats/DMs) and the bot's chat list.
     fn routes(&self, services: &AppServices) -> Option<axum::Router> {
         let db = services.db.clone();
-        let routing = lark_kit::routing::RoutingApi::new(services.state.clone(), "linear")
+        let routing = lark_kit::routing::RoutingApi::new(services.state.clone(), ROUTING_SPEC)
             .router(self.bot_slot.clone());
         Some(
             crate::db::user_map::router(db.clone())

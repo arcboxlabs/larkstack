@@ -1,12 +1,52 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use lark_kit::routing::{RoutingEvent, RoutingFeatures, RoutingSpec, SubjectSpec};
 use lark_kit::{LarkBotClient, SlotGuard, StateSlot};
 use larkstack_core::{ActionSpec, App, AppServices, Instance, Kind, Manifest};
 use serde_json::Value;
 use tokio_util::sync::CancellationToken;
 
 use crate::config::AppState;
+
+const ROUTING_EVENTS: &[RoutingEvent] = &[
+    RoutingEvent {
+        value: "pull_request",
+        label: "Pull requests",
+        description: "Opened, review requested, and merged pull requests",
+    },
+    RoutingEvent {
+        value: "issues",
+        label: "Issues (alert labels)",
+        description: "Issues with configured alert labels",
+    },
+    RoutingEvent {
+        value: "workflow_run",
+        label: "CI failures",
+        description: "Failed workflow runs",
+    },
+    RoutingEvent {
+        value: "secret_scanning",
+        label: "Secret scanning",
+        description: "Secret scanning alerts",
+    },
+    RoutingEvent {
+        value: "dependabot",
+        label: "Dependabot alerts",
+        description: "Critical and high Dependabot alerts",
+    },
+];
+
+const ROUTING_SPEC: RoutingSpec = RoutingSpec {
+    namespace: "github",
+    subject: SubjectSpec {
+        label: "Repository",
+        placeholder: "owner/repo",
+        help: "GitHub routes by repository full name, e.g. owner/repo.",
+    },
+    events: ROUTING_EVENTS,
+    features: RoutingFeatures::SOURCE_WITH_ALERTS,
+};
 
 /// The registered App for the console host.
 pub fn app() -> Arc<dyn App> {
@@ -63,7 +103,7 @@ impl App for GitHubApp {
     /// Console admin routes: GET/PUT the live notification routing config.
     fn routes(&self, services: &AppServices) -> Option<axum::Router> {
         Some(
-            lark_kit::routing::RoutingApi::new(services.state.clone(), "github")
+            lark_kit::routing::RoutingApi::new(services.state.clone(), ROUTING_SPEC)
                 .router(self.bot_slot.clone()),
         )
     }

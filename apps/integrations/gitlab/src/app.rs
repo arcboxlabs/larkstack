@@ -1,12 +1,52 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use lark_kit::routing::{RoutingEvent, RoutingFeatures, RoutingSpec, SubjectSpec};
 use lark_kit::{LarkBotClient, SlotGuard, StateSlot};
 use larkstack_core::{ActionSpec, App, AppServices, Instance, Kind, Manifest};
 use serde_json::Value;
 use tokio_util::sync::CancellationToken;
 
 use crate::config::AppState;
+
+const ROUTING_EVENTS: &[RoutingEvent] = &[
+    RoutingEvent {
+        value: "merge_request",
+        label: "Merge requests",
+        description: "Opened, reopened, and merged merge requests",
+    },
+    RoutingEvent {
+        value: "issue",
+        label: "Issues (alert labels)",
+        description: "Issues with newly added configured alert labels",
+    },
+    RoutingEvent {
+        value: "pipeline",
+        label: "Pipeline failures",
+        description: "Failed GitLab pipelines",
+    },
+    RoutingEvent {
+        value: "note",
+        label: "Comments",
+        description: "GitLab note/comment events",
+    },
+    RoutingEvent {
+        value: "push",
+        label: "Pushes",
+        description: "Branch push events with commits",
+    },
+];
+
+const ROUTING_SPEC: RoutingSpec = RoutingSpec {
+    namespace: "gitlab",
+    subject: SubjectSpec {
+        label: "Project or group",
+        placeholder: "group/project",
+        help: "GitLab routes by project path_with_namespace, e.g. group/project.",
+    },
+    events: ROUTING_EVENTS,
+    features: RoutingFeatures::SOURCE_WITH_ALERTS,
+};
 
 /// The registered App for the console host.
 pub fn app() -> Arc<dyn App> {
@@ -65,7 +105,7 @@ impl App for GitLabApp {
     /// Console admin routes: GET/PUT the live notification routing config.
     fn routes(&self, services: &AppServices) -> Option<axum::Router> {
         Some(
-            lark_kit::routing::RoutingApi::new(services.state.clone(), "gitlab")
+            lark_kit::routing::RoutingApi::new(services.state.clone(), ROUTING_SPEC)
                 .router(self.bot_slot.clone()),
         )
     }

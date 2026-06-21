@@ -14,7 +14,7 @@ use axum::{
 use larkstack_core::StateStore;
 use serde::Serialize;
 
-use super::Config;
+use super::{Config, RoutingSpec};
 use crate::{Live, StateSlot, bot::LarkBotClient};
 
 /// The routing admin API for one App, bound to its [`StateStore`] namespace.
@@ -23,27 +23,29 @@ use crate::{Live, StateSlot, bot::LarkBotClient};
 ///
 /// ```ignore
 /// fn routes(&self, services: &AppServices) -> Option<axum::Router> {
-///     Some(RoutingApi::new(services.state.clone(), "github").router(self.bot_slot.clone()))
+///     Some(RoutingApi::new(services.state.clone(), ROUTING_SPEC).router(self.bot_slot.clone()))
 /// }
 /// ```
 #[derive(Clone)]
 pub struct RoutingApi {
     store: Arc<dyn StateStore>,
-    namespace: &'static str,
+    spec: RoutingSpec,
 }
 
 impl RoutingApi {
-    /// Bind the API to `store` under `namespace` (the App's name).
-    pub fn new(store: Arc<dyn StateStore>, namespace: &'static str) -> Self {
-        Self { store, namespace }
+    /// Bind the API to `store` using the App's routing spec.
+    pub fn new(store: Arc<dyn StateStore>, spec: RoutingSpec) -> Self {
+        Self { store, spec }
     }
 
-    /// The axum router: `GET`/`PUT /routing` (config) + `GET /chats` (the bot's group
-    /// chats, for the console chat-picker) + `GET /users` (the users the bot can DM, for
-    /// the user-picker). `bots` is the App's live-bot slot — `/chats` and `/users` read it
-    /// via [`Live`] and return `503` while the App is stopped or has no bot.
+    /// The axum router: `GET /routing/spec`, `GET`/`PUT /routing` (config) +
+    /// `GET /chats` (the bot's group chats, for the console chat-picker) +
+    /// `GET /users` (the users the bot can DM, for the user-picker). `bots` is
+    /// the App's live-bot slot — `/chats` and `/users` read it via [`Live`] and
+    /// return `503` while the App is stopped or has no bot.
     pub fn router(self, bots: StateSlot<LarkBotClient>) -> Router {
         let config = Router::new()
+            .route("/routing/spec", get(Self::spec))
             .route("/routing", get(Self::get).put(Self::put))
             .with_state(self);
         let live = Router::new()
@@ -55,16 +57,22 @@ impl RoutingApi {
 
     /// The current config (defaults when unset).
     async fn current(&self) -> Config {
-        Config::load(&self.store, self.namespace).await
+        Config::load(&self.store, self.spec.namespace).await
     }
 
     /// Validate and persist a new config, returning it on success.
     async fn replace(&self, config: Config) -> Result<Config, RoutingError> {
-        config.validate().map_err(RoutingError::Invalid)?;
-        Config::save(&self.store, self.namespace, &config)
+        config
+            .validate_for(&self.spec)
+            .map_err(RoutingError::Invalid)?;
+        Config::save(&self.store, self.spec.namespace, &config)
             .await
             .map_err(RoutingError::Store)?;
         Ok(config)
+    }
+
+    async fn spec(State(api): State<RoutingApi>) -> Json<RoutingSpec> {
+        Json(api.spec)
     }
 
     async fn get(State(api): State<RoutingApi>) -> Json<Config> {

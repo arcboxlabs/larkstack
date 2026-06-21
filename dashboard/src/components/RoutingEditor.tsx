@@ -40,6 +40,21 @@ interface User {
   open_id: string;
   name: string;
 }
+interface RoutingSpec {
+  namespace: string;
+  subject: {
+    label: string;
+    placeholder: string;
+    help: string;
+  };
+  events: EventOption[];
+  features: {
+    user_map: boolean;
+    alert_labels: boolean;
+    chat_picker: boolean;
+    user_picker: boolean;
+  };
+}
 
 // ── Editable shape: rows carry a stable client key (avoids index keys) and
 //    alert_labels is edited as a CSV string. ──────────────────────────────────
@@ -73,35 +88,27 @@ export interface EventOption {
 export interface RoutingEditorProps {
   /** App name; backs the API base `/api/apps/<appName>/routing`. */
   appName: string;
-  /** The app's event vocabulary, shown as per-rule filter checkboxes. */
-  eventOptions: EventOption[];
-  /**
-   * Show the reviewer user-map section (default `true`). Linear keeps its own
-   * DB-backed Linear→Lark email map, so it hides this routing-blob one.
-   */
-  showUserMap?: boolean;
-  /** Show the alert-labels section (default `true`). Unused by apps without
-   * label-triggered alerts (e.g. Linear). */
-  showAlertLabels?: boolean;
 }
 
-export function RoutingEditor({
-  appName,
-  eventOptions,
-  showUserMap = true,
-  showAlertLabels = true,
-}: RoutingEditorProps) {
+export function RoutingEditor({ appName }: RoutingEditorProps) {
   const url = `/api/apps/${appName}/routing`;
+  const { data: spec, error: specError } = useSWR<RoutingSpec>(`${url}/spec`);
   const { data, error, mutate } = useSWR<RoutingConfig>(url);
   // The bot's chats + reachable users power the searchable pickers; absent (503)
   // when the app is stopped or has no bot — the fields then fall back to manual
   // entry. `shouldRetryOnError: false` so a stopped app doesn't retry-storm.
-  const { data: chats } = useSWR<Chat[]>(`/api/apps/${appName}/chats`, {
-    shouldRetryOnError: false,
-  });
-  const { data: users } = useSWR<User[]>(`/api/apps/${appName}/users`, {
-    shouldRetryOnError: false,
-  });
+  const { data: chats } = useSWR<Chat[]>(
+    spec?.features.chat_picker ? `/api/apps/${appName}/chats` : null,
+    {
+      shouldRetryOnError: false,
+    },
+  );
+  const { data: users } = useSWR<User[]>(
+    spec?.features.user_picker ? `/api/apps/${appName}/users` : null,
+    {
+      shouldRetryOnError: false,
+    },
+  );
   const [edit, setEdit] = useState<EditState | null>(null);
   const [feedback, setFeedback] = useState<Feedback>(null);
   const keyer = useRef(0);
@@ -153,14 +160,21 @@ export function RoutingEditor({
   if (error) {
     return <p className="error">Failed to load: {errMessage(error)}</p>;
   }
-  if (!edit) {
+  if (specError) {
+    return (
+      <p className="error">
+        Failed to load routing spec: {errMessage(specError)}
+      </p>
+    );
+  }
+  if (!edit || !spec) {
     return <Spinner />;
   }
 
   const onSave = async () => {
     setFeedback(null);
     try {
-      await save.trigger(toWire(edit));
+      await save.trigger(toWire(edit, spec));
       setFeedback({ tone: "ok", text: "routing saved" });
     } catch (e) {
       setFeedback({ tone: "error", text: errMessage(e) });
@@ -232,15 +246,15 @@ export function RoutingEditor({
                 className="routing-field-label"
                 htmlFor={`match-${rule.key}`}
               >
-                Match
+                {spec.subject.label}
                 <span className="routing-field-hint">
-                  exact, “group/*”, or “*” for all
+                  exact, “{spec.subject.placeholder}/*”, or “*” for all
                 </span>
               </label>
               <Input
                 id={`match-${rule.key}`}
                 className="routing-input"
-                placeholder="group/*"
+                placeholder={spec.subject.placeholder}
                 value={rule.match}
                 onChange={(e) =>
                   setEdit((s) =>
@@ -268,7 +282,7 @@ export function RoutingEditor({
                   )
                 }
               >
-                {eventOptions.map((opt) => (
+                {spec.events.map((opt) => (
                   <Toggle
                     key={opt.value}
                     value={opt.value}
@@ -341,7 +355,7 @@ export function RoutingEditor({
       </section>
 
       {/* ── Reviewer user map ── */}
-      {showUserMap && (
+      {spec.features.user_map && (
         <section className="routing-section">
           <div className="routing-section-head">
             <span className="routing-section-title">Reviewer user map</span>
@@ -420,7 +434,7 @@ export function RoutingEditor({
       )}
 
       {/* ── Alert labels ── */}
-      {showAlertLabels && (
+      {spec.features.alert_labels && (
         <section className="routing-section">
           <div className="routing-section-head">
             <span className="routing-section-title">Alert labels</span>
@@ -647,7 +661,7 @@ function patchUser(
   return { ...s, user_map: s.user_map.map((u) => (u.key === key ? fn(u) : u)) };
 }
 
-function toWire(e: EditState): RoutingConfig {
+function toWire(e: EditState, spec: RoutingSpec): RoutingConfig {
   const dest = (d: DestRow): Destination => ({
     kind: d.kind,
     target: d.target.trim(),
@@ -661,15 +675,19 @@ function toWire(e: EditState): RoutingConfig {
     default_destinations: e.default_destinations
       .map(dest)
       .filter((d) => d.target.length > 0),
-    user_map: e.user_map
-      .map((m) => ({
-        username: m.username.trim(),
-        lark_email: m.lark_email.trim(),
-      }))
-      .filter((m) => m.username.length > 0 && m.lark_email.length > 0),
-    alert_labels: e.alert_labels
-      .split(",")
-      .map((s) => s.trim())
-      .filter((s) => s.length > 0),
+    user_map: spec.features.user_map
+      ? e.user_map
+          .map((m) => ({
+            username: m.username.trim(),
+            lark_email: m.lark_email.trim(),
+          }))
+          .filter((m) => m.username.length > 0 && m.lark_email.length > 0)
+      : [],
+    alert_labels: spec.features.alert_labels
+      ? e.alert_labels
+          .split(",")
+          .map((s) => s.trim())
+          .filter((s) => s.length > 0)
+      : [],
   };
 }
