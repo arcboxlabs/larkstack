@@ -83,6 +83,7 @@ type Feedback = { tone: "ok" | "error"; text: string } | null;
 export interface EventOption {
   value: string;
   label: string;
+  description: string;
 }
 
 export interface RoutingEditorProps {
@@ -97,13 +98,13 @@ export function RoutingEditor({ appName }: RoutingEditorProps) {
   // The bot's chats + reachable users power the searchable pickers; absent (503)
   // when the app is stopped or has no bot — the fields then fall back to manual
   // entry. `shouldRetryOnError: false` so a stopped app doesn't retry-storm.
-  const { data: chats } = useSWR<Chat[]>(
+  const { data: chats, error: chatsError } = useSWR<Chat[]>(
     spec?.features.chat_picker ? `/api/apps/${appName}/chats` : null,
     {
       shouldRetryOnError: false,
     },
   );
-  const { data: users } = useSWR<User[]>(
+  const { data: users, error: usersError } = useSWR<User[]>(
     spec?.features.user_picker ? `/api/apps/${appName}/users` : null,
     {
       shouldRetryOnError: false,
@@ -111,6 +112,8 @@ export function RoutingEditor({ appName }: RoutingEditorProps) {
   );
   const [edit, setEdit] = useState<EditState | null>(null);
   const [feedback, setFeedback] = useState<Feedback>(null);
+  // Wire-shape snapshot of the last loaded/saved config, for the dirty check.
+  const baseline = useRef<string | null>(null);
   const keyer = useRef(0);
   const nextKey = () => {
     keyer.current += 1;
@@ -144,6 +147,9 @@ export function RoutingEditor({ appName }: RoutingEditorProps) {
       alert_labels: data.alert_labels.join(", "),
     });
     keyer.current = k;
+    // The server config is already in wire shape, so it doubles as the dirty
+    // baseline (matches what `toWire` produces from a freshly-hydrated edit).
+    baseline.current = JSON.stringify(data);
   }, [data]);
 
   const save = useSWRMutation(
@@ -156,6 +162,22 @@ export function RoutingEditor({ appName }: RoutingEditorProps) {
       },
     },
   );
+
+  // Dirty when the edited config diverges from the loaded/saved baseline.
+  const dirty =
+    edit !== null &&
+    spec !== undefined &&
+    baseline.current !== null &&
+    JSON.stringify(toWire(edit, spec)) !== baseline.current;
+
+  // Warn before a full page unload (reload / close) while there are unsaved
+  // edits. In-app navigation isn't guarded — that needs a data router.
+  useEffect(() => {
+    if (!dirty) return;
+    const onBeforeUnload = (e: BeforeUnloadEvent) => e.preventDefault();
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [dirty]);
 
   if (error) {
     return <p className="error">Failed to load: {errMessage(error)}</p>;
@@ -180,6 +202,12 @@ export function RoutingEditor({ appName }: RoutingEditorProps) {
       setFeedback({ tone: "error", text: errMessage(e) });
     }
   };
+
+  // Pickers are offered by the spec but the chat/user list failed to load —
+  // the app is stopped or has no bound bot. Manual entry still works.
+  const pickersUnavailable =
+    (spec.features.chat_picker && !!chatsError) ||
+    (spec.features.user_picker && !!usersError);
 
   const newDest = (): DestRow => ({ key: nextKey(), kind: "chat", target: "" });
 
@@ -213,6 +241,16 @@ export function RoutingEditor({ appName }: RoutingEditorProps) {
         restart. Delivery needs a bound <code>lark_app</code> bot.
       </p>
 
+      {pickersUnavailable && (
+        <div className="banner-warn routing-notice">
+          <span>
+            Chat / user pickers are unavailable — the app is stopped or has no
+            bound Lark app. Enter a <code>chat_id</code> / <code>open_id</code>{" "}
+            / email by hand, or start the app to pick from a list.
+          </span>
+        </div>
+      )}
+
       {/* ── Rules ── */}
       <section className="routing-section">
         <div className="routing-section-head">
@@ -221,6 +259,10 @@ export function RoutingEditor({ appName }: RoutingEditorProps) {
             every matching rule contributes its destinations
           </span>
         </div>
+
+        {spec.subject.help && (
+          <p className="routing-section-help">{spec.subject.help}</p>
+        )}
 
         {edit.rules.length === 0 && (
           <p className="routing-empty">
@@ -288,6 +330,7 @@ export function RoutingEditor({ appName }: RoutingEditorProps) {
                     value={opt.value}
                     className="routing-chip"
                     aria-label={opt.label}
+                    title={opt.description}
                   >
                     <span className="routing-chip-check">✓</span>
                     {opt.label}
@@ -459,14 +502,20 @@ export function RoutingEditor({ appName }: RoutingEditorProps) {
           type="button"
           className="routing-save"
           onClick={onSave}
-          disabled={save.isMutating}
+          disabled={save.isMutating || !dirty}
         >
           {save.isMutating ? "Saving…" : "Save routing"}
         </Button>
-        {feedback && (
-          <span className={`routing-feedback ${feedback.tone}`}>
-            {feedback.text}
-          </span>
+        {/* A save error always wins; otherwise show the dirty hint, else the
+            last "saved" confirmation. */}
+        {feedback?.tone === "error" ? (
+          <span className="routing-feedback error">{feedback.text}</span>
+        ) : dirty ? (
+          <span className="routing-feedback dirty">unsaved changes</span>
+        ) : (
+          feedback?.tone === "ok" && (
+            <span className="routing-feedback ok">{feedback.text}</span>
+          )
         )}
       </div>
     </div>

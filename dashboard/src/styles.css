@@ -1092,6 +1092,15 @@ textarea.setup-admins {
   color: var(--muted);
 }
 
+/* Per-app subject explanation (spec.subject.help), tucked under the head rule. */
+.routing-section-help {
+  font-size: 0.78rem;
+  line-height: 1.5;
+  color: var(--muted);
+  margin: -0.6rem 0 1.1rem;
+  max-width: 64ch;
+}
+
 /* Rule card — white surface above the editor's cream backdrop, hairline only. */
 .routing-rule {
   position: relative;
@@ -1413,6 +1422,15 @@ textarea.setup-admins {
 .routing-feedback.error {
   color: var(--error);
   word-break: break-word;
+}
+
+.routing-feedback.dirty {
+  color: var(--warning);
+}
+
+/* Picker-unavailable banner inside the editor — spacing above the rules. */
+.routing-notice {
+  margin-bottom: 1.4rem;
 }
 
 /* ─── Base UI AlertDialog (delete confirmation) ─────────────────────────────── */
