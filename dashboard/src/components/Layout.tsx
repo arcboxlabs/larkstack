@@ -9,10 +9,8 @@ import { OpenConsoleBanner } from "./OpenConsoleBanner";
 // here — so they stay out of the header to keep it from growing with every app.
 const TABS = [
   { to: "/status", label: "Apps" },
-  { to: "/actions", label: "Actions" },
   { to: "/lark-apps", label: "Lark Apps" },
-  { to: "/config", label: "Config" },
-  { to: "/events", label: "Events" },
+  { to: "/events", label: "Event" },
 ] as const;
 
 /// The console shell: a Base UI Tabs bar whose value is driven by the URL (each
@@ -21,7 +19,7 @@ const TABS = [
 /// the widget semantics, keyboard navigation, and active styling.
 export function Layout() {
   const { pathname } = useLocation();
-  const current = TABS.find((t) => pathname.startsWith(t.to))?.to ?? "/status";
+  const current = TABS.find((t) => pathname.startsWith(t.to))?.to ?? pathname;
   const { me } = useMe();
   const who = me?.user?.name || me?.user?.email;
 

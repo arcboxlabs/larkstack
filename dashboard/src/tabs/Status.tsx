@@ -1,3 +1,4 @@
+import { Button } from "@base-ui/react/button";
 import { Switch } from "@base-ui/react/switch";
 import {
   type IconType,
@@ -6,21 +7,27 @@ import {
   SiLinear,
   SiX,
 } from "@icons-pack/react-simple-icons";
-import { useState } from "react";
-import { Link } from "react-router";
+import { type ComponentType, useState } from "react";
 import useSWR, { mutate } from "swr";
 import { Spinner } from "../components/Spinner";
 import { errMessage, mutateRequest } from "../lib/http";
+import { ActionCard, CATALOG } from "./Actions";
+import { GitHub } from "./GitHub";
+import { Gitlab } from "./Gitlab";
+import { Linear } from "./Linear";
+import { Minutes } from "./Minutes";
+import { Standup } from "./Standup";
+import { X } from "./X";
 
-/// Apps that have a dedicated config page. Their card title links there; any
-/// app without an entry here renders a plain, static title.
-const APP_ROUTES: Record<string, string> = {
-  linear: "/linear",
-  github: "/github",
-  gitlab: "/gitlab",
-  x: "/x",
-  standup: "/standup",
-  minutes: "/minutes",
+/// Apps that have a dedicated config surface. The components are the existing
+/// per-app pages, rendered inline so the API contracts stay exactly the same.
+const APP_CONFIGS: Record<string, ComponentType> = {
+  linear: Linear,
+  github: GitHub,
+  gitlab: Gitlab,
+  x: X,
+  standup: Standup,
+  minutes: Minutes,
 };
 
 /// Proper-cased product names + brand logos (simple-icons) for the registered
@@ -99,6 +106,10 @@ export function Status() {
 
   const [pending, setPending] = useState<string | null>(null);
   const [toggleError, setToggleError] = useState<string | null>(null);
+  const [openPanel, setOpenPanel] = useState<{
+    app: string;
+    panel: "action" | "config";
+  } | null>(null);
 
   const onToggle = async (name: string, enabled: boolean) => {
     setPending(name);
@@ -129,28 +140,40 @@ export function Status() {
             const s = subsystems[app.name];
             const state: State =
               s?.state ?? (app.enabled ? "starting" : "stopped");
-            const route = APP_ROUTES[app.name];
+            const actions = CATALOG[app.name] ?? [];
+            const ConfigPanel = APP_CONFIGS[app.name];
+            const activePanel =
+              openPanel?.app === app.name ? openPanel.panel : null;
+            const togglePanel = (panel: "action" | "config") => {
+              setOpenPanel((current) =>
+                current?.app === app.name && current.panel === panel
+                  ? null
+                  : { app: app.name, panel },
+              );
+            };
             return (
-              <article
-                key={app.name}
-                className={`status-card ${state}${route ? " linkable" : ""}`}
-              >
-                {/* Stretched link: the whole card navigates to the app's page,
-                    while the controls below sit above this overlay and stay
-                    clickable (avoids invalid <button>-inside-<a> nesting). */}
-                {route && (
-                  <Link
-                    className="status-card-link"
-                    to={route}
-                    aria-label={`open ${appLabel(app.name)} settings`}
-                  />
-                )}
+              <article key={app.name} className={`status-card ${state}`}>
                 <header>
                   <span className="status-name">
                     <AppLogo name={app.name} />
                     {appLabel(app.name)}
                   </span>
                   <div className="status-controls">
+                    <Button
+                      className={`action-btn ${activePanel === "action" ? "ok" : ""}`}
+                      type="button"
+                      onClick={() => togglePanel("action")}
+                    >
+                      Action
+                    </Button>
+                    <Button
+                      className={`action-btn ${activePanel === "config" ? "ok" : ""}`}
+                      type="button"
+                      onClick={() => togglePanel("config")}
+                      disabled={!ConfigPanel}
+                    >
+                      Config
+                    </Button>
                     <span
                       className="status-pill"
                       style={{
@@ -175,6 +198,32 @@ export function Status() {
                 <footer className="muted">
                   {s ? `updated ${freshness(s.updated_at)}` : "not started"}
                 </footer>
+                {activePanel === "action" && (
+                  <div className="status-card-panel">
+                    <div className="actions-subsystem">Action</div>
+                    {actions.length === 0 ? (
+                      <div className="muted help-text">
+                        no actions defined yet
+                      </div>
+                    ) : (
+                      <div className="action-cards">
+                        {actions.map((a) => (
+                          <ActionCard
+                            key={a.name}
+                            subsystem={app.name}
+                            action={a}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+                {activePanel === "config" && ConfigPanel && (
+                  <div className="status-card-panel">
+                    <div className="actions-subsystem">Config</div>
+                    <ConfigPanel />
+                  </div>
+                )}
               </article>
             );
           })}
