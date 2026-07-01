@@ -19,7 +19,7 @@ interface Action {
   params?: ActionParam[];
 }
 
-const CATALOG: Record<string, Action[]> = {
+export const CATALOG: Record<string, Action[]> = {
   linear: [
     {
       name: "ping",
@@ -120,7 +120,7 @@ const CATALOG: Record<string, Action[]> = {
 
 type RunState = { tone: "ok" | "error"; text: string } | null;
 
-function ActionCard({
+export function ActionCard({
   subsystem,
   action,
 }: {
